@@ -66,6 +66,8 @@ analysed, and the Xen adaptation is designed and proven with a PoC. Full
 implementation (the three Xen parsers, the tools/libs collector, and the Safety
 Case linker) is the next phase — see `docs/{en,ja}/03-xen-spdx-design.md` §5.
 
+The single tracked list of remaining work is **`worklog/backlog.md`**.
+
 ---
 
 # xen-spdx-sbom（日本語）
