@@ -185,6 +185,18 @@ compile.h(if..then..fi) → .banner(if..then..else..fi) の順に潰し、最終
 - サンプル: `analysis/xen-full/`。成果物: `docs/{en,ja}/04-xen-parsers-implementation.md`、
   `docs/{en,ja}/03` §5 と README を更新。
 
+## 2026-07-05 B-2 の必要性調査（優先度の見直し）
+
+「優先すべき B-2（Safety Case リンカ）の必要性は調査済みか？」という問いを受け、未実施だった
+ため調査。結果、当初の「P1・FuSa 直結」は推論で**未確立**と判明。
+- SPDX: 例の関係型は 3.0.1 core に実在するが、安全専用 **Safety Profile は SPDX 3.1（RC）**。
+  → 今 3.0.1 で作ると作り直しリスク。例の `hasDeclaredLicense` 誤用も発見。
+- Xen FuSa: ロードマップ wiki は bot 保護で取得不可。公式 FuSa ブログに **SBOM/SPDX 言及なし**。
+  → SIG の critical path にある確証なし。
+- 対応: `backlog.md` を改訂。B-2 を保留、必要性確認タスク **B-0** を新設、推奨順序を
+  **B-1 → B-3 → B-0 →（Yes なら）B-2 → …** に変更。教訓: 優先度は需要と標準成熟度の裏取り後に
+  確定する。
+
 ## 総括（社外＝Xen コミュニティ向け説明の骨子）
 
 - **問い**: Linux v7 に入った SPDX-SBOM ツール（`scripts/sbom/`）を Xen 自身の SPDX
