@@ -1,0 +1,106 @@
+{
+  "_note": "ILLUSTRATIVE EXAMPLE (not generated). Shows how to link a generated Xen hypervisor SBOM (from the PoC) to Safety Case artefacts using SPDX 3.0.1 Relationships, supporting the Xen FuSa (IEC 61508 / ISO 26262) effort. See docs/{en,ja}/03-xen-spdx-design.md section 4.",
+  "@context": "https://spdx.org/rdf/3.0.1/spdx-context.jsonld",
+  "@graph": [
+    {
+      "type": "CreationInfo",
+      "@id": "_:creationinfo",
+      "specVersion": "3.0.1",
+      "created": "2026-07-04T00:00:00Z",
+      "createdBy": ["urn:xenproject.org:agent:fusa-sig"]
+    },
+    {
+      "type": "SoftwareAgent",
+      "spdxId": "urn:xenproject.org:agent:fusa-sig",
+      "name": "Xen FuSa SIG SBOM tooling",
+      "creationInfo": "_:creationinfo"
+    },
+
+    {
+      "type": "software_Sbom",
+      "spdxId": "urn:xenproject.org:sbom:xen-hypervisor-4.23",
+      "name": "Xen hypervisor SBOM (build)",
+      "software_sbomType": ["build"],
+      "creationInfo": "_:creationinfo",
+      "comment": "Produced by the KernelSbom-based generator against prelink.o (hypervisor core). See analysis/xen-poc/."
+    },
+    {
+      "type": "software_Package",
+      "spdxId": "urn:xenproject.org:pkg:xen-hypervisor-4.23",
+      "name": "xen-hypervisor",
+      "software_packageVersion": "4.23-unstable",
+      "creationInfo": "_:creationinfo"
+    },
+
+    {
+      "type": "Artifact",
+      "spdxId": "urn:xenproject.org:safety:safety-plan",
+      "name": "Xen Safety Plan",
+      "comment": "Safety Case document: overall safety plan (IEC 61508 / ISO 26262).",
+      "creationInfo": "_:creationinfo"
+    },
+    {
+      "type": "Artifact",
+      "spdxId": "urn:xenproject.org:safety:safety-requirements",
+      "name": "Xen Safety Requirements Specification",
+      "creationInfo": "_:creationinfo"
+    },
+    {
+      "type": "Artifact",
+      "spdxId": "urn:xenproject.org:safety:misra-guidelines",
+      "name": "Xen MISRA C Coding Guidelines & Compliance Evidence",
+      "comment": "Coding standard + deviation records; evidence of MISRA compliance for the hypervisor sources.",
+      "creationInfo": "_:creationinfo"
+    },
+    {
+      "type": "Artifact",
+      "spdxId": "urn:xenproject.org:safety:change-management",
+      "name": "Xen Change Management Plan",
+      "creationInfo": "_:creationinfo"
+    },
+
+    {
+      "type": "Relationship",
+      "spdxId": "urn:xenproject.org:rel:pkg-has-sbom",
+      "from": "urn:xenproject.org:pkg:xen-hypervisor-4.23",
+      "relationshipType": "hasDeclaredLicense",
+      "to": ["urn:xenproject.org:sbom:xen-hypervisor-4.23"],
+      "comment": "The hypervisor package is described by the generated build SBOM.",
+      "creationInfo": "_:creationinfo"
+    },
+    {
+      "type": "Relationship",
+      "spdxId": "urn:xenproject.org:rel:sbom-safety-plan",
+      "from": "urn:xenproject.org:sbom:xen-hypervisor-4.23",
+      "relationshipType": "hasDocumentation",
+      "to": ["urn:xenproject.org:safety:safety-plan"],
+      "comment": "The SBOM (and thus the delivered hypervisor) is governed by the Safety Plan.",
+      "creationInfo": "_:creationinfo"
+    },
+    {
+      "type": "Relationship",
+      "spdxId": "urn:xenproject.org:rel:pkg-safety-requirements",
+      "from": "urn:xenproject.org:pkg:xen-hypervisor-4.23",
+      "relationshipType": "hasRequirement",
+      "to": ["urn:xenproject.org:safety:safety-requirements"],
+      "creationInfo": "_:creationinfo"
+    },
+    {
+      "type": "Relationship",
+      "spdxId": "urn:xenproject.org:rel:pkg-misra",
+      "from": "urn:xenproject.org:pkg:xen-hypervisor-4.23",
+      "relationshipType": "hasEvidence",
+      "to": ["urn:xenproject.org:safety:misra-guidelines"],
+      "comment": "MISRA compliance evidence applies to the source files enumerated in the SBOM.",
+      "creationInfo": "_:creationinfo"
+    },
+    {
+      "type": "Relationship",
+      "spdxId": "urn:xenproject.org:rel:pkg-change-mgmt",
+      "from": "urn:xenproject.org:pkg:xen-hypervisor-4.23",
+      "relationshipType": "hasDocumentation",
+      "to": ["urn:xenproject.org:safety:change-management"],
+      "creationInfo": "_:creationinfo"
+    }
+  ]
+}

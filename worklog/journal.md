@@ -121,3 +121,31 @@
 - `tools/`・`libs/`・`stubdom/` は autotools + 手書き Makefile で `.cmd` 無し →
   strace / compile_commands.json / パッケージ単位 SBOM の補完機構が必要。
 - 成果物: `docs/{en,ja}/02-xen-build-analysis.md`。
+
+### フェーズ4 実績: Xen SPDX 生成 設計 + PoC
+- レジストリ精査: `command_parser_registry.py` は CC/LD/AR/NM/OBJCOPY/STRIP を
+  **環境変数駆動の汎用パターン**で認識（`env_or_default_pattern`）。→ Xen の
+  gcc/ld/objcopy/nm/ar/strip は無改変で認識される見込みと判明。Linux 固有は
+  `link-vmlinux.sh`, `syscallhdr.sh`, `bin2c`, `mkuboot.sh` 等のスクリプト。
+- **Xen ハイパーバイザー実ビルド成功**: `make -C xen XEN_TARGET_ARCH=x86_64 defconfig`
+  → `-j16`。所要 **23秒**。成果物: `xen-syms`(26MB), `xen`(3.1MB)。`.cmd` **624個**生成。
+  - `.cmd` 形式確認: `cmd_prelink.o := ld -melf_x86_64 -r -o prelink.o common/built_in.o ...`
+  - `xen-syms` は2パスのシンボル埋め込みで特殊リンクされ **`.cmd` 無し** → ルート不適。
+    → **ルートは `prelink.o`**（全 built_in.o を集約、`.prelink.o.cmd` あり）を採用。
+- **PoC 成功**: 無改変 KernelSbom を Xen に適用（`scripts/xen-sbom-poc/run-xen-poc.sh`）。
+  in-tree（src==obj）、`--do-not-fail-on-unknown-build-command --write-output-on-error`。
+  exit 0。生成:
+  - `sbom-build.spdx.json` 3.1MB / 3,280 要素（software_File **1,441**、build_Build 539）
+  - `sbom-output.spdx.json` 25KB / 12 要素（software_Package 1 = prelink.o）
+  - `sbom.used-files.txt` **1,442 ファイル**（C 419 / ヘッダ 505 / .o 490 / .S 23 / .a 3）
+  - SPDX 3.0.1 妥当。→ **prelink.o からハイパーバイザーコアのソースまで追跡成功**。
+- **未知コマンドは6警告のみ** = 必要な Xen 固有パーサは3系統: `mv -f X.new X`(compat
+  header)、`python3 ./tools/compat-build-header.py`、`cat .banner; sed ... compile.h`。
+  → **無改変で約99%完全、3パーサ追加で完全化**という定量結論。
+- サンプル: `analysis/xen-poc/`（output 完全 + build 抜粋 + used-files + run.log）。
+  巨大な build 本体(3.1MB)は抜粋化し本体は削除（再生成可能）。
+- **Safety（両方対応）**: `analysis/xen-safety-case-relationships.example.spdx.json` に
+  生成 SBOM/Package と Safety Case 文書（安全計画・要件・MISRA・変更管理）を SPDX
+  Relationships で紐付ける例示モデルを作成。設計は `docs/{en,ja}/03-xen-spdx-design.md`。
+- 成果物: `docs/{en,ja}/03-xen-spdx-design.md`（アーキテクチャ [A]再利用/[B]tools補完/
+  [C]Safety リンカ、PoC 結果、次段階）。
