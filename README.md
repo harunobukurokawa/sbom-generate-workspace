@@ -39,9 +39,14 @@ community.
   `prelink.o` — with **only 6 unknown-command warnings**. Gap to 100%: just
   **three** small Xen-specific command parsers (`mv`, `compat-build-header.py`,
   `compile.h`).
+- **Complete hypervisor SBOM (Phase B):** with ~200 lines of Xen extensions
+  (`scripts/xen-sbom-poc/xen_parsers.py`, injected at runtime, upstream tool still
+  unmodified), the hypervisor SBOM reaches **zero unknown commands, exit 0**, now
+  covering **1,519 files** (+77: compat `.i`, xlat `.lst`, codegen `.py`, boot
+  `.bin`, compile.h.in, .banner). Valid SPDX 3.0.1; 9 unit tests pass.
 - **Conclusion:** the upstream tool is directly reusable for the Xen hypervisor.
-  See `docs/{en,ja}/03-xen-spdx-design.md` for the architecture and the SPDX
-  Safety Case relationship model.
+  See `docs/{en,ja}/03-xen-spdx-design.md` for the architecture and Safety Case
+  model, and `docs/{en,ja}/04-xen-parsers-implementation.md` for the parsers.
 
 ## Reproduce
 
@@ -50,7 +55,8 @@ scripts/fetch-sources.sh                 # clone Linux (torvalds) + Xen (xenbits
 scripts/run-linux-sbom.sh                # build kernel + make sbom (Linux)
 make -C external/xen/xen XEN_TARGET_ARCH=x86_64 defconfig
 make -C external/xen/xen XEN_TARGET_ARCH=x86_64 -j"$(nproc)"
-scripts/xen-sbom-poc/run-xen-poc.sh      # run KernelSbom against Xen (PoC)
+scripts/xen-sbom-poc/run-xen-poc.sh      # baseline: unmodified KernelSbom (PoC)
+scripts/xen-sbom-poc/generate-xen-sbom.sh  # complete SBOM (Xen extensions, zero unknowns)
 ```
 
 ## Status

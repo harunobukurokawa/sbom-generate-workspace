@@ -154,6 +154,37 @@
 - `README.md` に「Results at a glance」「Reproduce」節を追加し、各成果物へリンク。
 - 本ジャーナルに全経緯を時系列で記録済み（社外説明資料の素材）。
 
+## 2026-07-04（続き）Phase B: ハイパーバイザー SBOM の 100% 化
+
+ユーザー確認: 次の重点は「ハイパーバイザー SBOM を100%化」、方式は「実行時注入」（上流無改変）。
+
+### 実装（`scripts/xen-sbom-poc/`、上流 `external/linux` は無改変）
+- `xen_parsers.py`: Xen 固有パーサ + IfBlock/prelude 対応版 `parse_inputs_from_commands`
+  + 存在フィルタ + install。`gen_xen_sbom.py`（runpy で上流 sbom.py 起動）、
+  `generate-xen-sbom.sh`（fail-on-unknown で実行し未知件数を集計）、`tests/`（9件）。
+
+### 注入の要点（ハマりどころ）
+- レジストリ（`DEFAULT_COMMAND_PARSER_REGISTRY`）は呼び出し時参照 → 差し替えが即効。
+- だが `parse_inputs_from_commands` は `cmd_file` が import 時に束縛済みのため、
+  **`cmd_file` 自身の名前空間も差し替える**必要があった（これに気付くまで IfBlock/prelude が
+  効かなかった）。
+
+### 反復的なゼロ到達（早期失敗が深部を隠していた）
+無改変 PoC の警告6件は早期失敗の産物。パーサ追加でグラフが深く辿られ次の層が露出:
+compat-*.py（約280件）→ combine_two_binaries.py → binfile/objdump検証prelude →
+compile.h(if..then..fi) → .banner(if..then..else..fi) の順に潰し、最終的に **未知0件**。
+- 一時ファイル問題: `mv X.new X` の `.new`（rename 済で不在）や名前引数 `compat/xen.h` が
+  「file does not exist」エラーに → **obj-tree 存在フィルタ**で一括解決（ポストビルド SBOM は
+  実在ファイルのみ参照すべき、という一般規則）。
+
+### 結果（検証済み）
+- **exit 0 / 未知コマンド 0 件**（ベースライン6件）。残警告は無害な型推定3件のみ。
+- カバレッジ **1,442 → 1,519 ファイル（+77）**: compat `.i` 22、xlat `.lst` 20、
+  codegen `.py` 4、boot `.bin` 2、compile.h.in、.banner、process-banner.sed 等。
+- SPDX 3.0.1 妥当（build 3,554 要素 / software_File 1,518）。ユニットテスト9件全パス。
+- サンプル: `analysis/xen-full/`。成果物: `docs/{en,ja}/04-xen-parsers-implementation.md`、
+  `docs/{en,ja}/03` §5 と README を更新。
+
 ## 総括（社外＝Xen コミュニティ向け説明の骨子）
 
 - **問い**: Linux v7 に入った SPDX-SBOM ツール（`scripts/sbom/`）を Xen 自身の SPDX
@@ -164,8 +195,11 @@
   - 根拠2: 実 PoC で `prelink.o` を起点に **1,442 ファイル**を追跡し妥当な SPDX 3.0.1 を
     生成。未知コマンドは3系統のみ（`mv` / `compat-build-header.py` / `compile.h`）。
   - 汎用ツール（gcc/ld/objcopy/nm/ar）は環境変数駆動で既に認識される点が効いた。
-- **残作業（次段階）**: (1) Xen 固有パーサ3つで100%化、(2) `tools/`・`libs/` は strace/
-  compile_commands.json で補完、(3) Safety Case を SPDX Relationships で紐付ける
-  リンカの正式化（FuSa SIG と整合）。
+- **ハイパーバイザーの完全化（Phase B 完了）**: 約200行の Xen 拡張（実行時注入・上流無改変）で
+  **未知コマンド0件・exit 0**、1,519 ファイルを網羅。ギャップは当初想定の3コマンドより大きく、
+  compat-*/binfile/combine/compile.h/.banner の各ファミリ + 存在フィルタで解消。
+- **残作業（次段階）**: (1) 外部 SPDX バリデータでの検証（`@context` 展開後）、(2) `tools/`・
+  `libs/` を strace/compile_commands.json で補完、(3) Safety Case を SPDX Relationships で
+  紐付けるリンカの正式化（FuSa SIG と整合）、(4) Xen 拡張の上流貢献の検討。
 - **成果物**: `docs/en/` `docs/ja/`（01 Linux ツール / 02 Xen ビルド解析 / 03 設計+PoC）、
   再現スクリプト（`scripts/`）、サンプル SBOM（`analysis/`）。

@@ -1,0 +1,161 @@
+{
+  "@context": [
+    "https://spdx.org/rdf/3.0.1/spdx-context.jsonld",
+    {
+      "b": "urn:xenproject.org:34df97be-d32a-50b8-a666-59aaa50999ca/build/",
+      "o": "urn:xenproject.org:34df97be-d32a-50b8-a666-59aaa50999ca/output/",
+      "p": "urn:xenproject.org:34df97be-d32a-50b8-a666-59aaa50999ca/"
+    }
+  ],
+  "_note": "Excerpt of COMPLETE Xen build SBOM (xen_parsers extensions): 2 elems/type, arrays truncated. Full doc 3554 elements.",
+  "@graph": [
+    {
+      "type": "SpdxDocument",
+      "spdxId": "b:0",
+      "creationInfo": "_:creationinfo",
+      "rootElement": [
+        "b:1"
+      ],
+      "profileConformance": [
+        "core",
+        "software",
+        "build"
+      ],
+      "import": [
+        {
+          "type": "ExternalMap",
+          "externalSpdxId": "o:3"
+        },
+        {
+          "type": "ExternalMap",
+          "externalSpdxId": "o:5"
+        }
+      ]
+    },
+    {
+      "type": "SoftwareAgent",
+      "spdxId": "p:0",
+      "creationInfo": "_:creationinfo",
+      "name": "KernelSbom"
+    },
+    {
+      "type": "CreationInfo",
+      "@id": "_:creationinfo",
+      "specVersion": "3.0.1",
+      "createdBy": [
+        "p:0"
+      ],
+      "created": "2026-07-04T13:30:01Z",
+      "comment": "Summarize warnings:\nCould not infer primary purpose for /home/kurokawa/bldwork/kernel/sbomspdx/external/xen/xen/tools/compat-build-header.py\nCould not infer primary purpose for /home/kurokawa/bldwork/kernel/sbomspdx/external/xen/xen/include/compat/xen.i\nCould not infer primary purpose for /home/kurokawa/bldwork/kernel/sbomspdx/external/xen/xen/include/compat/arch-x86/xen.i\n... (Found 49 more instances of this warning)"
+    },
+    {
+      "type": "software_Sbom",
+      "spdxId": "b:1",
+      "creationInfo": "_:creationinfo",
+      "element": [
+        "b:2",
+        "b:3",
+        "b:4",
+        "b:5",
+        "b:6",
+        "...(+3545 more, truncated)"
+      ],
+      "rootElement": [
+        "o:5"
+      ],
+      "software_sbomType": [
+        "build"
+      ]
+    },
+    {
+      "type": "software_File",
+      "spdxId": "b:2",
+      "creationInfo": "_:creationinfo",
+      "name": "common/built_in.o",
+      "verifiedUsing": [
+        {
+          "type": "Hash",
+          "hashValue": "4110f9f3b249fce44103d368d9009368570c5596d7f852f8df51e8be25a5c6c9",
+          "algorithm": "sha256"
+        }
+      ],
+      "software_primaryPurpose": "other",
+      "software_contentIdentifier": [
+        {
+          "type": "software_ContentIdentifier",
+          "software_contentIdentifierType": "gitoid",
+          "software_contentIdentifierValue": "8e7a7d28934df30e5060fde907605cb432b1c046"
+        }
+      ]
+    },
+    {
+      "type": "software_File",
+      "spdxId": "b:3",
+      "creationInfo": "_:creationinfo",
+      "name": "drivers/built_in.o",
+      "verifiedUsing": [
+        {
+          "type": "Hash",
+          "hashValue": "4388a08d199a274291a6f68ca336a12d3d34ab048841e3ab35ea015f9ac66cd4",
+          "algorithm": "sha256"
+        }
+      ],
+      "software_primaryPurpose": "other",
+      "software_contentIdentifier": [
+        {
+          "type": "software_ContentIdentifier",
+          "software_contentIdentifierType": "gitoid",
+          "software_contentIdentifierValue": "2731d2e3b289b4cc7ea4157de91b89f20dbfe299"
+        }
+      ]
+    },
+    {
+      "type": "simplelicensing_LicenseExpression",
+      "spdxId": "b:3269",
+      "creationInfo": "_:creationinfo",
+      "simplelicensing_licenseExpression": "GPL-2.0-only"
+    },
+    {
+      "type": "simplelicensing_LicenseExpression",
+      "spdxId": "b:3270",
+      "creationInfo": "_:creationinfo",
+      "simplelicensing_licenseExpression": "MIT"
+    },
+    {
+      "type": "Relationship",
+      "spdxId": "b:3273",
+      "creationInfo": "_:creationinfo",
+      "relationshipType": "hasDeclaredLicense",
+      "from": "b:227",
+      "to": [
+        "b:3269"
+      ]
+    },
+    {
+      "type": "Relationship",
+      "spdxId": "b:3274",
+      "creationInfo": "_:creationinfo",
+      "relationshipType": "hasDeclaredLicense",
+      "from": "b:235",
+      "to": [
+        "b:3270"
+      ]
+    },
+    {
+      "type": "build_Build",
+      "spdxId": "b:1521",
+      "creationInfo": "_:creationinfo",
+      "comment": "ld    -melf_x86_64  -r -o prelink.o common/built_in.o drivers/built_in.o lib/built_in.o xsm/built_in.o arch/x86/built_in.o --start-group arch/x86/lib/lib.a arch/x86/lib/cpu-policy/lib.a lib/lib.a --end-group",
+      "build_buildType": "urn:xenproject.org:Kbuild",
+      "build_buildId": "o:3"
+    },
+    {
+      "type": "build_Build",
+      "spdxId": "b:1524",
+      "creationInfo": "_:creationinfo",
+      "comment": "ld    -melf_x86_64  -r -o common/built_in.o common/bitmap.o common/bug.o common/config_data.o common/core_parking.o common/cpu.o common/dm.o common/domain.o common/domid.o common/event_2l.o common/event_channel.o common/event_fifo.o common/grant_table.o common/gzip/built_in.o common/hypfs.o common/ioreq.o common/irq.o common/kernel.o common/keyhandler.o common/kexec.o common/kimage.o common/livepatch.o common/livepatch_elf.o common/mem_access.o common/memory.o common/monitor.o common/multicall.o common/notifier.o common/numa.o common/page_alloc.o common/pdx.o common/percpu.o common/preempt.o common/random.o common/rangeset.o common/radix-tree.o common/rcupdate.o common/rwlock.o common/shutdown.o common/softirq.o common/smp.o common/spinlock.o common/stop_machine.o common/symbols.o common/sysctl.o common/tasklet.o common/time.o common/timer.o common/trace.o common/version.o common/virtual_region.o common/vm_event.o common/vmap.o common/vsprintf.o common/wait.o common/xmalloc_tlsf.o common/compat/domain.o common/compat/memory.o common/compat/multicall.o common/compat/xlat.o common/domctl.o common/sched/built_in.o common/libelf/built_in.o common/bitops.init.o common/warning.init.o common/decompress.init.o common/bunzip2.init.o common/unxz.init.o common/unlzma.init.o common/lzo.init.o common/unlzo.init.o common/unlz4.init.o common/unzstd.init.o",
+      "build_buildType": "urn:xenproject.org:Kbuild",
+      "build_buildId": "o:3"
+    }
+  ]
+}

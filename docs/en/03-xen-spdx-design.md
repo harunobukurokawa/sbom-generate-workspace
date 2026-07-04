@@ -119,11 +119,19 @@ Notes:
   requirements can be attached at **file granularity** later (e.g. per-file
   deviation records), which is exactly what a FuSa assessor wants.
 
-## 5. Next steps (later phases, out of scope here)
+## 5. Next steps (later phases)
 
-1. Implement `xen_parsers/` (mv, `compat-build-header.py`, `compile.h`) + arch
-   map; target a 100%-complete hypervisor graph and validate with an SPDX
-   validator (after expanding the custom JSON-LD `@context`).
+> **Update (Phase B — done):** step 1 is implemented. The Xen extensions
+> (`scripts/xen-sbom-poc/xen_parsers.py`, runtime-injected, upstream unmodified)
+> take the hypervisor SBOM to **zero unknown commands / exit 0**, covering 1,519
+> files. See `04-xen-parsers-implementation.md`. The gap turned out larger than
+> the 3 commands the baseline suggested (early-failure hid deeper recipes), and
+> was closed by handling the whole compat-*/binfile/combine/compile.h/.banner
+> families plus an existence filter for transient files.
+
+1. ~~Implement `xen_parsers/` + reach a 100%-complete hypervisor graph.~~ **Done.**
+   Remaining: validate with an external SPDX validator after expanding the custom
+   JSON-LD `@context`.
 2. Wire a `make sbom`-style target into `xen/` (or a standalone wrapper) so the
    hypervisor SBOM is reproducible in CI.
 3. Add the tools/libs collector ([B]) for whole-Xen coverage.

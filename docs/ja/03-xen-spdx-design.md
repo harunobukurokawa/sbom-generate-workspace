@@ -112,11 +112,17 @@ Xen の**機能安全（FuSa）**（IEC 61508 / ISO 26262、Xen FuSa SIG）を�
   **ファイル粒度**で付与できる（例: ファイル毎の逸脱記録）。これは FuSa 審査員が
   求めるものそのものである。
 
-## 5. 次段階（後続フェーズ・今回対象外）
+## 5. 次段階（後続フェーズ）
 
-1. `xen_parsers/`（mv, `compat-build-header.py`, `compile.h`）+ アーキ対応の実装。
-   100% 完全なハイパーバイザーグラフを目標とし、SPDX バリデータで検証（カスタム
-   JSON-LD `@context` を展開後）。
+> **更新（Phase B — 完了）:** ステップ1は実装済み。Xen 拡張
+> （`scripts/xen-sbom-poc/xen_parsers.py`、実行時注入・上流無改変）により、ハイパーバイザー
+> SBOM は **未知コマンド0件 / exit 0**、1,519 ファイルを網羅。`04-xen-parsers-implementation.md`
+> 参照。ギャップはベースラインが示した3コマンドより大きく（早期失敗が深部レシピを隠していた）、
+> compat-*/binfile/combine/compile.h/.banner の各ファミリ処理と一時ファイルの存在フィルタで
+> 解消した。
+
+1. ~~`xen_parsers/` 実装 + 100% 完全なハイパーバイザーグラフ達成。~~ **完了。**
+   残り: カスタム JSON-LD `@context` 展開後、外部 SPDX バリデータで検証。
 2. `make sbom` 相当のターゲットを `xen/` に組み込む（またはスタンドアロンラッパ）ことで、
    ハイパーバイザー SBOM を CI で再現可能にする。
 3. Xen 全体カバレッジのため tools/libs コレクタ（[B]）を追加。
