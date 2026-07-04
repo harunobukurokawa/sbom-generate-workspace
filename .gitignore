@@ -1,0 +1,20 @@
+# Cloned upstream sources (large, fetched via scripts/fetch-sources.sh)
+/external/
+
+# Python virtualenv / caches
+.venv/
+__pycache__/
+*.pyc
+
+# Build artifacts
+*.o
+*.ko
+*.cmd
+kernel_build/
+
+# Generated SBOM samples are kept selectively under analysis/; ignore stray outputs
+*.spdx.json.tmp
+
+# Editor / OS
+.vscode/
+.DS_Store
