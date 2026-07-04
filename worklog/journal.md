@@ -60,3 +60,64 @@
   `analysis`, `external`。
 - `.gitignore`（`external/`, `.venv/`, ビルド生成物）、`README.md`（EN/JA）、
   本ジャーナル、`decisions.md` を作成。
+- フェーズ0 をコミット（`92f1fcc`）。
+
+### フェーズ1: ソース取得（進行中）
+- `scripts/fetch-sources.sh all` を実行。Linux（torvalds mainline, `--depth=1`）と
+  Xen（xenbits mainline, `--depth=1`）を `external/` へ clone。
+
+### 追加 Web 調査（フェーズ2/3/4 の当たり付け）
+- **Linux ツール（LWN 1055009）**: `CONFIG_SBOM` を有効化し `make sbom` で post-build
+  実行。`.cmd`（Kbuild が各出力の完全なビルドコマンドを記録）を解析し、カーネルイメージ
+  ／モジュールをルートに依存グラフを再構築。SPDX 3.0.1、JSON-LD 直列化。3文書構成。
+  約14コミット・4,086行の Python。現状 x86 / arm64 のみ。
+- **Xen ビルドシステム（xen-devel / patchew）**: `xen/` は Kbuild 由来。`.cmd` ファイルを
+  `dir/.target.cmd` 形式で生成し、`cmd_and_record` でコマンドライン・依存を記録。
+  `xen/Rules.mk`・`xen/scripts/Kbuild.include`。既存ターゲットの `.cmd` を
+  `$(foreach f,$(existing-targets),$(dir $(f)).$(notdir $(f)).cmd)` で読み込む。
+  → **`xen/`（ハイパーバイザー）では Linux ツールの `.cmd` 解析ロジックが流用しやすい**
+  という前提が裏付けられた（実ビルドで最終確認予定）。
+  参考: https://lists.xenproject.org/archives/html/xen-devel/2015-12/msg01814.html
+  （Kbuild import の初出）, 2020 の build system improvements パッチ群。
+
+### フェーズ1 実績: ソース取得完了
+- Linux: torvalds mainline を clone。`Makefile` は **VERSION=7 PATCHLEVEL=2
+  SUBLEVEL=0 EXTRAVERSION=-rc1**（= v7.2-rc1）。**v7.0 専用タグは存在せず**、mainline は
+  既に 7.2-rc1。ツール `scripts/sbom/` は実在（`sbom.py`, `sbom/`, `tests/`,
+  `Documentation/tools/sbom/sbom.rst`）。→ 計画のリスク項目「v7.0 実在性」を解消。
+- Xen: xenbits mainline を clone。HEAD `f0161d2`（2026-07-03）。`xen/Makefile` は
+  **XEN_VERSION=4 SUBVERSION=23 EXTRAVERSION=-unstable**（= 4.23-unstable）。
+
+### フェーズ2 実績: Linux ツールの精読・再現・文書化
+- 精読: `sbom.py`（2フェーズ: cmd グラフ→SPDX グラフ）、`config.py`（全 CLI オプション）、
+  `Makefile` の `sbom` ターゲット（約2246行）、`hardcoded_dependencies.py`、
+  `cmd_graph/cmd_file.py`（`SAVEDCMD_PATTERN=^(saved)?cmd_.*?:=`）。
+- **再現ビルド成功**: `make defconfig O=kernel_build` → `make sbom O=kernel_build -j16`。
+  x86_64 defconfig。所要 **4分17秒**。3文書生成:
+  - `sbom-source.spdx.json`  4.5MB / 13,796 要素（software_File 7,138 ほか）
+  - `sbom-build.spdx.json`  27MB / 15,282 要素（build_Build 3,923 ほか）
+  - `sbom-output.spdx.json` 34KB / 60 要素（software_Package 13 = bzImage + modules）
+  - **SPDX 3.0.1** 確認（`@context: https://spdx.org/rdf/3.0.1/spdx-context.jsonld`、
+    JSON-LD `@graph`）。JSON 妥当性 OK。
+  - 注: `make sbom` は `--generate-used-files` を付けないため `sbom.used-files.txt` は
+    未生成（仕様どおり）。ビルドログ末尾の exit 2 は最後の `ls` が当該ファイルを探して
+    失敗しただけで、生成自体は成功。
+- サンプル保存: `analysis/sample-sbom-output.spdx.json`（完全な output 文書 34KB）、
+  `analysis/sample-sbom-{source,build}-excerpt.spdx.json`（type 毎2件・配列短縮の抜粋）、
+  `analysis/linux-reproduction-stats.md`（統計）。※27MB の build 文書は `external/`
+  （git-ignore）に残し、リポジトリには含めない。
+- 成果物: `docs/{en,ja}/01-linux-sbom-tool.md`。再現手順は `scripts/run-linux-sbom.sh`。
+
+### フェーズ3 実績: Xen ビルド解析
+- `xen/`（ハイパーバイザー）は Kbuild 由来。`xen/scripts/Kbuild.include`:
+  `dot-target=$(@D)/.$(@F)`、`if_changed` が `printf 'cmd_$@ := ...' > $(dot-target).cmd`。
+- **`xen/tools/fixdep.c` は Linux と同一形式**を出力: `cmd_%s`（397行）、`source_%s`（352行）、
+  `deps_%s`（354行）。→ KernelSbom の `cmd_file.py`（`(saved)?cmd_`、`source_` 検査、依存行）と
+  **構造的に互換**。唯一差は Linux=`savedcmd_` / Xen=`cmd_` だが正規表現が両対応のため
+  **無改変で `.cmd` 行解析が通る**見込み。
+- 残ギャップ: `command_parser_registry.py`（gcc/ld/objcopy/`_parse_link_vmlinux_command` 等
+  Linux 固有）。Xen の最終リンク（`xen-syms`, `xen.efi`, `mkelf32` 等）は未知コマンドとなり
+  既定で失敗 → Xen 用パーサ追加 or `--do-not-fail-on-unknown-build-command`。
+- `tools/`・`libs/`・`stubdom/` は autotools + 手書き Makefile で `.cmd` 無し →
+  strace / compile_commands.json / パッケージ単位 SBOM の補完機構が必要。
+- 成果物: `docs/{en,ja}/02-xen-build-analysis.md`。

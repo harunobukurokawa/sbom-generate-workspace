@@ -1,0 +1,159 @@
+{
+  "@context": [
+    "https://spdx.org/rdf/3.0.1/spdx-context.jsonld",
+    {
+      "b": "urn:spdx.dev:24a6d21f-c30b-5b94-b681-b81e6e3595aa/build/",
+      "s": "urn:spdx.dev:24a6d21f-c30b-5b94-b681-b81e6e3595aa/source/",
+      "o": "urn:spdx.dev:24a6d21f-c30b-5b94-b681-b81e6e3595aa/output/",
+      "p": "urn:spdx.dev:24a6d21f-c30b-5b94-b681-b81e6e3595aa/"
+    }
+  ],
+  "_note": "Excerpt of sbom-build.spdx.json: up to 2 elements/type, arrays truncated to 5. Full doc has 15282 elements.",
+  "@graph": [
+    {
+      "type": "SpdxDocument",
+      "spdxId": "b:0",
+      "creationInfo": "_:creationinfo",
+      "rootElement": [
+        "b:1"
+      ],
+      "profileConformance": [
+        "core",
+        "software",
+        "build"
+      ],
+      "import": [
+        {
+          "type": "ExternalMap",
+          "externalSpdxId": "s:4"
+        },
+        {
+          "type": "ExternalMap",
+          "externalSpdxId": "s:5"
+        },
+        {
+          "type": "ExternalMap",
+          "externalSpdxId": "s:6"
+        },
+        {
+          "type": "ExternalMap",
+          "externalSpdxId": "s:7"
+        },
+        {
+          "type": "ExternalMap",
+          "externalSpdxId": "s:8"
+        },
+        "...(+7146 more, truncated for sample)"
+      ]
+    },
+    {
+      "type": "SoftwareAgent",
+      "spdxId": "p:0",
+      "creationInfo": "_:creationinfo",
+      "name": "KernelSbom"
+    },
+    {
+      "type": "CreationInfo",
+      "@id": "_:creationinfo",
+      "specVersion": "3.0.1",
+      "createdBy": [
+        "p:0"
+      ],
+      "created": "2026-07-04T13:25:46Z"
+    },
+    {
+      "type": "software_Sbom",
+      "spdxId": "b:1",
+      "creationInfo": "_:creationinfo",
+      "element": [
+        "b:2",
+        "b:3",
+        "b:4",
+        "b:5",
+        "b:6",
+        "...(+15273 more, truncated for sample)"
+      ],
+      "rootElement": [
+        "b:2"
+      ],
+      "software_sbomType": [
+        "build"
+      ]
+    },
+    {
+      "type": "software_File",
+      "spdxId": "b:2",
+      "creationInfo": "_:creationinfo",
+      "name": "$(obj_tree)",
+      "software_fileKind": "directory"
+    },
+    {
+      "type": "Relationship",
+      "spdxId": "b:3",
+      "creationInfo": "_:creationinfo",
+      "relationshipType": "contains",
+      "from": "b:2",
+      "to": [
+        "b:4",
+        "b:5",
+        "b:6",
+        "b:7",
+        "b:8",
+        "...(+3984 more, truncated for sample)"
+      ]
+    },
+    {
+      "type": "software_File",
+      "spdxId": "b:4",
+      "creationInfo": "_:creationinfo",
+      "name": "arch/x86/boot/setup.bin",
+      "verifiedUsing": [
+        {
+          "type": "Hash",
+          "hashValue": "5a39938042e812a27b818272eadc5bd94960fa64d856d4fd29826e62ec3a02c5",
+          "algorithm": "sha256"
+        }
+      ],
+      "software_primaryPurpose": "executable",
+      "software_contentIdentifier": [
+        {
+          "type": "software_ContentIdentifier",
+          "software_contentIdentifierType": "gitoid",
+          "software_contentIdentifierValue": "7d25a4fc954e7b7edff20d3d003eafa2f3a3abc2"
+        }
+      ]
+    },
+    {
+      "type": "Relationship",
+      "spdxId": "b:3980",
+      "creationInfo": "_:creationinfo",
+      "relationshipType": "ancestorOf",
+      "from": "o:3",
+      "to": [
+        "b:3981",
+        "b:3984",
+        "b:3987",
+        "b:3990",
+        "b:3993",
+        "...(+3918 more, truncated for sample)"
+      ],
+      "completeness": "complete"
+    },
+    {
+      "type": "build_Build",
+      "spdxId": "b:3981",
+      "creationInfo": "_:creationinfo",
+      "comment": "(dd if=arch/x86/boot/setup.bin bs=4k conv=sync status=none; cat arch/x86/boot/vmlinux.bin) >arch/x86/boot/bzImage",
+      "build_buildType": "urn:spdx.dev:Kbuild",
+      "build_buildId": "o:3"
+    },
+    {
+      "type": "build_Build",
+      "spdxId": "b:3984",
+      "creationInfo": "_:creationinfo",
+      "comment": "ld -r -m elf_x86_64 --fatal-warnings -z noexecstack --build-id=sha1  -T ./scripts/module.lds -o fs/efivarfs/efivarfs.ko fs/efivarfs/efivarfs.o fs/efivarfs/efivarfs.mod.o .module-common.o",
+      "build_buildType": "urn:spdx.dev:Kbuild",
+      "build_buildId": "o:3"
+    }
+  ]
+}

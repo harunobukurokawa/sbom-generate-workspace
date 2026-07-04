@@ -1,0 +1,124 @@
+{
+  "@context": [
+    "https://spdx.org/rdf/3.0.1/spdx-context.jsonld",
+    {
+      "s": "urn:spdx.dev:24a6d21f-c30b-5b94-b681-b81e6e3595aa/source/",
+      "p": "urn:spdx.dev:24a6d21f-c30b-5b94-b681-b81e6e3595aa/"
+    }
+  ],
+  "_note": "Excerpt of sbom-source.spdx.json: up to 2 elements/type, arrays truncated to 5. Full doc has 13796 elements.",
+  "@graph": [
+    {
+      "type": "SpdxDocument",
+      "spdxId": "s:0",
+      "creationInfo": "_:creationinfo",
+      "rootElement": [
+        "s:1"
+      ],
+      "profileConformance": [
+        "core",
+        "software",
+        "simpleLicensing"
+      ]
+    },
+    {
+      "type": "SoftwareAgent",
+      "spdxId": "p:0",
+      "creationInfo": "_:creationinfo",
+      "name": "KernelSbom"
+    },
+    {
+      "type": "CreationInfo",
+      "@id": "_:creationinfo",
+      "specVersion": "3.0.1",
+      "createdBy": [
+        "p:0"
+      ],
+      "created": "2026-07-04T13:25:46Z"
+    },
+    {
+      "type": "software_Sbom",
+      "spdxId": "s:1",
+      "creationInfo": "_:creationinfo",
+      "element": [
+        "s:2",
+        "s:3",
+        "s:4",
+        "s:5",
+        "s:6",
+        "...(+13787 more, truncated for sample)"
+      ],
+      "rootElement": [
+        "s:2"
+      ],
+      "software_sbomType": [
+        "source"
+      ]
+    },
+    {
+      "type": "software_File",
+      "spdxId": "s:2",
+      "creationInfo": "_:creationinfo",
+      "name": "$(src_tree)",
+      "software_fileKind": "directory"
+    },
+    {
+      "type": "Relationship",
+      "spdxId": "s:3",
+      "creationInfo": "_:creationinfo",
+      "relationshipType": "contains",
+      "from": "s:2",
+      "to": [
+        "s:4",
+        "s:5",
+        "s:6",
+        "s:7",
+        "s:8",
+        "...(+7132 more, truncated for sample)"
+      ]
+    },
+    {
+      "type": "software_File",
+      "spdxId": "s:4",
+      "creationInfo": "_:creationinfo",
+      "name": "include/linux/compiler-version.h",
+      "verifiedUsing": [
+        {
+          "type": "Hash",
+          "hashValue": "71b523f4f5ae572c6cee7fb2d62617ef900f3024619b1a61c8d9e758dfa002c8",
+          "algorithm": "sha256"
+        }
+      ],
+      "software_primaryPurpose": "source",
+      "software_contentIdentifier": [
+        {
+          "type": "software_ContentIdentifier",
+          "software_contentIdentifierType": "gitoid",
+          "software_contentIdentifierValue": "ac1665a98a15db4ba9a9c1af968d81b3d928a0eb"
+        }
+      ]
+    },
+    {
+      "type": "simplelicensing_LicenseExpression",
+      "spdxId": "s:7141",
+      "creationInfo": "_:creationinfo",
+      "simplelicensing_licenseExpression": "GPL-2.0-only"
+    },
+    {
+      "type": "simplelicensing_LicenseExpression",
+      "spdxId": "s:7142",
+      "creationInfo": "_:creationinfo",
+      "simplelicensing_licenseExpression": "GPL-2.0"
+    },
+    {
+      "type": "Relationship",
+      "spdxId": "s:7184",
+      "creationInfo": "_:creationinfo",
+      "relationshipType": "hasDeclaredLicense",
+      "from": "s:4",
+      "to": [
+        "s:7141"
+      ]
+    }
+  ]
+}
