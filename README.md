@@ -29,11 +29,36 @@ community.
 2. `docs/{en,ja}/02-xen-build-analysis.md` — Xen build system analysis for SBOM generation
 3. `docs/{en,ja}/03-xen-spdx-design.md` — Design & PoC for Xen SPDX generation + Safety Case modelling
 
+## Results at a glance
+
+- **Linux tool reproduced** (v7.2-rc1, x86_64 defconfig, 4m17s): three valid
+  SPDX 3.0.1 documents (source 13,796 / build 15,282 / output 60 elements).
+- **Xen hypervisor PoC** (4.23-unstable, x86_64_defconfig, 23s build): the
+  *unmodified* Linux `KernelSbom` produced a valid SPDX 3.0.1 build SBOM for the
+  hypervisor core — **1,442 files traced** (419 `.c`, 505 `.h`, 23 `.S`) from
+  `prelink.o` — with **only 6 unknown-command warnings**. Gap to 100%: just
+  **three** small Xen-specific command parsers (`mv`, `compat-build-header.py`,
+  `compile.h`).
+- **Conclusion:** the upstream tool is directly reusable for the Xen hypervisor.
+  See `docs/{en,ja}/03-xen-spdx-design.md` for the architecture and the SPDX
+  Safety Case relationship model.
+
+## Reproduce
+
+```bash
+scripts/fetch-sources.sh                 # clone Linux (torvalds) + Xen (xenbits)
+scripts/run-linux-sbom.sh                # build kernel + make sbom (Linux)
+make -C external/xen/xen XEN_TARGET_ARCH=x86_64 defconfig
+make -C external/xen/xen XEN_TARGET_ARCH=x86_64 -j"$(nproc)"
+scripts/xen-sbom-poc/run-xen-poc.sh      # run KernelSbom against Xen (PoC)
+```
+
 ## Status
 
-Phase A (in progress): document the Linux tool, reproduce it, analyse the Xen
-build, and design + PoC the Xen adaptation. Full implementation is a later
-phase.
+Phase A complete: the Linux tool is documented and reproduced, the Xen build is
+analysed, and the Xen adaptation is designed and proven with a PoC. Full
+implementation (the three Xen parsers, the tools/libs collector, and the Safety
+Case linker) is the next phase — see `docs/{en,ja}/03-xen-spdx-design.md` §5.
 
 ---
 

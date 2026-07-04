@@ -149,3 +149,23 @@
   Relationships で紐付ける例示モデルを作成。設計は `docs/{en,ja}/03-xen-spdx-design.md`。
 - 成果物: `docs/{en,ja}/03-xen-spdx-design.md`（アーキテクチャ [A]再利用/[B]tools補完/
   [C]Safety リンカ、PoC 結果、次段階）。
+
+### フェーズ5 実績: 仕上げ
+- `README.md` に「Results at a glance」「Reproduce」節を追加し、各成果物へリンク。
+- 本ジャーナルに全経緯を時系列で記録済み（社外説明資料の素材）。
+
+## 総括（社外＝Xen コミュニティ向け説明の骨子）
+
+- **問い**: Linux v7 に入った SPDX-SBOM ツール（`scripts/sbom/`）を Xen 自身の SPDX
+  自動生成に再利用できるか。目的は Xen FuSa（IEC 61508 / ISO 26262）支援。
+- **答え（実証済み）**: **ハイパーバイザー（`xen/`）については、無改変で直接再利用できる。**
+  - 根拠1: Xen `xen/` は Linux Kbuild 由来で、`fixdep.c` が `cmd_`/`source_`/`deps_` を
+    出力 → KernelSbom の `.cmd` パーサと構造互換。
+  - 根拠2: 実 PoC で `prelink.o` を起点に **1,442 ファイル**を追跡し妥当な SPDX 3.0.1 を
+    生成。未知コマンドは3系統のみ（`mv` / `compat-build-header.py` / `compile.h`）。
+  - 汎用ツール（gcc/ld/objcopy/nm/ar）は環境変数駆動で既に認識される点が効いた。
+- **残作業（次段階）**: (1) Xen 固有パーサ3つで100%化、(2) `tools/`・`libs/` は strace/
+  compile_commands.json で補完、(3) Safety Case を SPDX Relationships で紐付ける
+  リンカの正式化（FuSa SIG と整合）。
+- **成果物**: `docs/en/` `docs/ja/`（01 Linux ツール / 02 Xen ビルド解析 / 03 設計+PoC）、
+  再現スクリプト（`scripts/`）、サンプル SBOM（`analysis/`）。
