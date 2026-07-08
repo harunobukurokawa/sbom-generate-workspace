@@ -215,3 +215,29 @@ compile.h(if..then..fi) → .banner(if..then..else..fi) の順に潰し、最終
   紐付けるリンカの正式化（FuSa SIG と整合）、(4) Xen 拡張の上流貢献の検討。
 - **成果物**: `docs/en/` `docs/ja/`（01 Linux ツール / 02 Xen ビルド解析 / 03 設計+PoC）、
   再現スクリプト（`scripts/`）、サンプル SBOM（`analysis/`）。
+
+## 2026-07-08 手順書（再現ランブック）の新規作成
+
+ユーザーから「Linux 再現・Xen PoC を人間の手で実際に実行し、手順の誤りチェック・結果の
+再現性確認・社外説明の準備をしたいので、既存 doc/script を統合した手順書がほしい」との
+依頼。まず既存資料を Explore エージェントで調査したところ、単一の通し手順書は**未作成**
+（README・各スクリプトのヘッダコメント・`docs/01〜04`・`worklog/journal.md`・
+`analysis/*` の統計/ログに内容が分散）と判明。ユーザーへその旨を報告のうえ、
+`docs/ja/05-reproduction-runbook.md` を新規作成した。
+
+- 内容: 前提条件（検証済み環境・所要時間）、手順1〜5（ソース取得 → Linux 再現 →
+  Xen ビルド → Xen PoC → Xen 完全版 SBOM）を「コマンド→期待される結果（実績値）」の
+  形式で記載。加えて単体テスト実行、JSON-LD 構造の手動検証方法、既知の警告一覧、
+  backlog に基づく「未実施・既知の限界」の節、社外説明用の要点を含める。
+- 数値・警告文字列は `analysis/linux-reproduction-stats.md`、`analysis/xen-poc/xen-poc.run.log`、
+  `analysis/xen-full/stats.md`、`analysis/xen-full/xen-full.run.log` から実際に転記。
+- ユーザー指示により**今回は日本語版のみ**作成。英語版 `docs/en/05-reproduction-runbook.md`
+  は別タスクとして `worklog/backlog.md` に追記した。
+
+## 2026-07-08 再現手順書の実地検証
+
+`docs/ja/05-reproduction-runbook.md` の手順1〜5をユーザー自身の手で通しで再実行し、
+手順書どおりに再現できるかを検証。結果、問題なし（記載した手順・コマンド・期待結果に
+誤りは見つからなかった）。再実行により `analysis/xen-poc/`・`analysis/xen-full/` の
+run log と生成 SBOM（`sbom-build.spdx.json` / `sbom-output.spdx.json`）が更新された
+ため、検証済みの成果物としてコミットする。

@@ -1,10 +1,10 @@
 [INFO] Extracting all files from the cmd graph to sbom.used-files.txt instead of only source files because source files cannot be reliably classified when the source and object trees are identical.
 [INFO] Skipped creating a dedicated source SBOM because source files cannot be reliably classified when the source and object trees are identical. Added source files to the build SBOM instead.
-[WARNING] Could not infer primary purpose for /home/kurokawa/bldwork/kernel/sbomspdx/external/xen/xen/tools/compat-build-header.py
-[WARNING] Could not infer primary purpose for /home/kurokawa/bldwork/kernel/sbomspdx/external/xen/xen/include/compat/xen.i
-[WARNING] Could not infer primary purpose for /home/kurokawa/bldwork/kernel/sbomspdx/external/xen/xen/include/compat/arch-x86/xen.i
+[WARNING] Could not infer primary purpose for /home/kurokawa/work/kernel/sbom-creation/external/xen/xen/tools/compat-build-header.py
+[WARNING] Could not infer primary purpose for /home/kurokawa/work/kernel/sbom-creation/external/xen/xen/include/compat/xen.i
+[WARNING] Could not infer primary purpose for /home/kurokawa/work/kernel/sbom-creation/external/xen/xen/include/compat/arch-x86/xen.i
 [WARNING] Summarize warnings:
-Could not infer primary purpose for /home/kurokawa/bldwork/kernel/sbomspdx/external/xen/xen/tools/compat-build-header.py
-Could not infer primary purpose for /home/kurokawa/bldwork/kernel/sbomspdx/external/xen/xen/include/compat/xen.i
-Could not infer primary purpose for /home/kurokawa/bldwork/kernel/sbomspdx/external/xen/xen/include/compat/arch-x86/xen.i
+Could not infer primary purpose for /home/kurokawa/work/kernel/sbom-creation/external/xen/xen/tools/compat-build-header.py
+Could not infer primary purpose for /home/kurokawa/work/kernel/sbom-creation/external/xen/xen/include/compat/xen.i
+Could not infer primary purpose for /home/kurokawa/work/kernel/sbom-creation/external/xen/xen/include/compat/arch-x86/xen.i
 ... (Found 49 more instances of this warning)

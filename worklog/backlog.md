@@ -66,6 +66,15 @@ B-2 の必要性を調べた結果、当初の「P1・FuSa 直結」は**推論�
 - 現状 x86 のみ。arm64/arm ハイパーバイザーで同手順を検証し、arch 依存差を洗い出す。
 - 完了条件: arm ビルドでも未知コマンド 0 に近い結果を確認、差分を文書化。
 
+### B-7 ⬜ P2 — 再現手順書（英語版）の作成
+- `docs/ja/05-reproduction-runbook.md`（2026-07-08 作成、日本語版のみ）の内容を
+  英語化し `docs/en/05-reproduction-runbook.md` として作成する（CLAUDE.md の
+  bilingual 同期規約に合わせる）。
+- 前提: 日本語版が実際の追試でレビュー・確定していること（数値・手順の誤りが
+  あれば先に日本語版を修正してから翻訳する）。
+- 完了条件: `docs/en/05-reproduction-runbook.md` が `docs/ja/05-reproduction-runbook.md`
+  と内容同期している。
+
 ## 推奨順序（2026-07-05 改訂）
 標準が安定し必要性が明確なものを優先: **B-1 → B-3 → B-0 →（B-0=Yes なら）B-2 → B-4 → B-6 → B-5**。
 - 旧案（B-2 先行）は撤回。B-2 は必要性未確立 + SPDX 3.1 Safety Profile が RC のため保留。
