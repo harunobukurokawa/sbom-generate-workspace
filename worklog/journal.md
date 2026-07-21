@@ -241,3 +241,97 @@ compile.h(if..then..fi) → .banner(if..then..else..fi) の順に潰し、最終
 誤りは見つからなかった）。再実行により `analysis/xen-poc/`・`analysis/xen-full/` の
 run log と生成 SBOM（`sbom-build.spdx.json` / `sbom-output.spdx.json`）が更新された
 ため、検証済みの成果物としてコミットする。
+
+## 2026-07-08 次段階の相談: バックログとの突き合わせ・B-8 新設
+
+生成 JSON の確認完了を受け、ユーザーから次段階の候補として「Arm でのビルド」
+「Safety の追加」「code との連携」の3点が提示された。`worklog/backlog.md` の
+既存項目と突き合わせて整理:
+
+- **Arm でのビルド** → 既存の **B-6** に対応。ただし推奨順序では最後尾（P3）。
+  x86 側の外部検証（B-1）・tools/libs カバレッジ拡大（B-3）が先に固まっていないと、
+  Arm 側の差分が「アーキ由来」か「手法未成熟由来」か切り分けにくいため、優先度を
+  今すぐ繰り上げる積極的理由はない旨を指摘。
+- **Safety の追加** → 既存の **B-2** に対応するが、2026-07-05 の調査結果により
+  **保留（⏸）中**。「Xen FuSa SIG が SBOM/SPDX を必要とする」根拠は未確立、かつ
+  SPDX 3.1 Safety Profile はまだ RC。着手前に必要性確認タスク **B-0** を完了させる
+  必要がある、と指摘（ユーザー案のまま進めると記録済みの決定と矛盾するため）。
+- **code との連携** → ユーザーに意図を確認したところ「トレーサビリティ関係で
+  コードと SBOM の依存関係が分かる仕組み」との回答。既存の cmd グラフは
+  成果物→ソースの向きの関係は持つが、**ソース→影響を受ける成果物への逆引き**を
+  行う利用者向けの仕組みは未整備と判明。既存項目に該当がないため、新規に
+  **B-8**（SBOM ↔ ソースコード トレーサビリティ照会の仕組み）として起票。
+
+`worklog/backlog.md` を更新: B-8 を追加し、推奨順序を
+`B-1 → B-3 → B-8 → B-0 →（Yes なら）B-2 → B-4 → B-6 → B-5` に改訂。
+併せて「2026-07-08 のレビュー」節に、ユーザー提示3項目とバックログ項目の
+対応関係を明記した。プラン: `/home/kurokawa/.claude/plans/json-arm-safety-code-rippling-hinton.md`。
+
+## 2026-07-22 Arm 検証の優先度確認・B-7（再現手順書英語版）の完了
+
+ユーザーから「次に Arm での動作を検証したいが、他の作業と優先度を比較したい」
+との相談。`worklog/backlog.md` の推奨順序（B-1 → B-3 → B-8 → B-0 → …→ B-6 → B-5）
+を確認し、Arm 検証（B-6）は「アーキ依存差の洗い出し」が目的のため、x86 側の
+外部バリデータ検証（B-1）・tools/libs カバレッジ拡大（B-3）が先に固まっていない
+と差分の原因切り分けが困難、という既存の記録済み判断を提示。ユーザーは
+「順番通りに進めましょう」と回答し、次段階は B-1（生成 SBOM の外部バリデータ
+検証）に決定。
+
+併せて、日本語版のみ存在していた `docs/ja/05-reproduction-runbook.md`
+（backlog B-7）の英語版が欠けていた点を指摘され、`docs/en/05-reproduction-runbook.md`
+を新規作成。日本語版は既に実際の追試で確定済みの内容（実績値・警告文含む）
+だったため、構成・数値をそのまま英訳し bilingual 同期規約（CLAUDE.md）を満たす
+形で作成した。backlog.md の B-7 を ✅ 完了に更新。
+
+## 2026-07-22 B-1（生成 SBOM の外部バリデータ検証）着手・完了
+
+B-1 着手前に、ユーザーから外部バリデータについての補足説明を求められたため、
+着手前に次の点を説明: (1) 現状の検証は構造カウントのみで SPDX 3.0.1 の
+オントロジー準拠は見ていないこと、(2) カスタム `@context`（サイズ削減の
+ための短縮プレフィックス）が JSON-LD の「展開」を要する可能性があること、
+(3) 候補ツール（`pyspdxtools`／`pyshacl`+SHACL／SPDX Online Tool）はいずれも
+実際に試すまで SPDX 3.0.1 対応度が不確実であること。
+
+ユーザーの承認後、実機調査を実施:
+
+1. Python 3.12（システムのデフォルトは3.8のため別途）で `.venv` を作成し
+   `pip install spdx-tools` → 実装（`spdx_tools/spdx3/clitools/pyspdxtools3.py`、
+   `spdx_tools/spdx/parser/parse_anything.py`）を直接確認した結果、
+   **SPDX 3.0.1 JSON-LD を読み込む経路が存在しない**（2.x→3.0 の一方向
+   エクスポートのみ）と判明。B-1 用途には使用不可。
+2. `spdx/spdx-3-model` リポジトリ（GitHub API 経由、`3.0.1` タグ）の
+   `serialization/jsonld/validation.md` に、公式の検証手順が明記されている
+   ことを発見: 構造検証は `check-jsonschema`（`spdx-json-schema.json` を
+   URL参照）、意味検証は `pyshacl`（`spdx-model.ttl` を URL参照、SHACL）。
+   事前の手動 context 展開は当初の想定と異なり不要（両ツールがURL直接参照で
+   動作）。
+3. 両ツールを実際にインストールし、`analysis/xen-full/` の実データ
+   （`sbom-output.spdx.json`・`sbom-build.spdx.json`）で検証:
+   - `sbom-output.spdx.json`: SHACL に**無改変で conform**。
+   - `sbom-build.spdx.json`: SHACL で3件の violation。原因を調査した結果、
+     `sbom-output.spdx.json` 側で定義された要素（`o:3`/`o:5`）への
+     `from`/`to`/`rootElement` 参照であり、`pyshacl` が文書間参照
+     （`SpdxDocument` の import）を解決できないという spdx-3-model 自身が
+     明記する既知の制約と完全に一致。両文書の `@graph` を結合して再検証した
+     ところ violation 0 件で conform し、データ自体には欠陥がないことを
+     裏付けた。
+   - JSON Schema 側は、`@context` が配列（公式 + 独自プレフィックス）で
+     あることをスキーマが文字列リテラル前提で拒否する既知の制約があった。
+     `@context` を一時的に文字列へ平坦化（実ファイルは変更せず一時コピーで）
+     すると両文書ともエラー0件でpass（`sbom-build.spdx.json` は3.2MBのため
+     約8分22秒かかった）。
+4. 結果を再現可能にするため `scripts/validate-spdx.sh`（構造＋意味検証の
+   ラッパー、`--with` で複数文書のグラフ結合検証にも対応）と
+   `scripts/validate-spdx-requirements.txt` を追加。
+5. 調査結果を `docs/{en,ja}/06-external-validation.md` として文書化（bilingual
+   同期）。`worklog/decisions.md` に ADR-0006（バリデータ選定の経緯・理由）を
+   追加。`worklog/backlog.md` の B-1 を ✅ 完了に更新し、推奨順序の次の着手を
+   B-3 に更新した。
+
+**総括**: 生成 SBOM は SPDX 公式ツールによる構造・意味の両検証を、2つの
+既知・無害なツール制約を除いて通過する。当初 backlog に想定されていた
+`pyspdxtools` は実際には使えず、`spdx-3-model` 自身が明記する
+`check-jsonschema`＋`pyshacl` に切り替えた点が今回の主要な方針変更。
+
+次のアクション: B-1（外部 SPDX バリデータでの検証）に着手する。前提としてカスタム
+JSON-LD `@context` の展開が必要（`docs/*/01 §5` 参照）。
