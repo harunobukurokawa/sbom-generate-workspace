@@ -439,3 +439,71 @@ git-ignore 済みのため実害はない）。
 
 次: ユーザーの指示により B-8（SBOM ↔ ソースコード トレーサビリティ照会）の
 再確認に着手する。
+
+## 2026-08-01 B-8（トレーサビリティ照会）のレビュー・事実確認
+
+先行するB-3再検証（`sbom_analysis/`記述の訂正、ADR-0007）と並行して、
+ユーザーの指示によりP2項目 **B-8**（SBOM ↔ ソースコード トレーサビリティ照会）
+の内容をレビューし、記述されていた前提を実データで裏取りした。
+
+1. B-8 の起票根拠（ADR-0005）および `worklog/backlog.md` の記述は、生成済み
+   SPDX JSON-LD が成果物→入力ソースの関係を `relationshipType: contains` /
+   `generatedFrom` で持っている、としていた。これは実際の生成物を確認せずに
+   書かれた未検証の記述であることが判明（ADR-0007と同種のパターン）。
+2. `analysis/xen-full/sbom-build.spdx.json`・`sbom-output.spdx.json`
+   （`--fail-on-unknown` ありの完全版PoC出力）を実際にPythonでロードし、
+   `Relationship` 要素の `relationshipType` を集計:
+   `hasOutput`(583) / `hasInput`(580) / `hasDeclaredLicense`(279) /
+   `dependsOn`(2) / `ancestorOf`(1)。`contains`/`generatedFrom` は0件。
+3. 実際のグラフ形を個々の `from`/`to` を辿って確認:
+   `software_File --(hasInput)--> build_Build --(hasOutput)--> software_File`
+   の繰り返し連鎖であり、ファイル同士が直接結ばれるのではなく必ず
+   `build_Build`（1コマンド1ノード）を経由する。連鎖の最上流では
+   `sbom-output.spdx.json` 側の `o:`接頭辞IDへ越境参照する
+   （例: `b:1523 hasOutput → o:5` = `prelink.o`）。
+4. 逆引き（ソースファイル→影響を受ける成果物）の実現可能性を実測で確認:
+   共通ヘッダ `include/xen/bitops.h` は346個の `build_Build` の入力になって
+   おり、想定内のfan-out規模。`Relationship`一覧（全1445件）を一度スキャン
+   すれば軽量な逆引きインデックスが作れることを確認した。
+5. `worklog/backlog.md` の B-8 項目と `worklog/decisions.md` に **ADR-0008**
+   を追加して訂正。B-3 は本ツールの技術的な必須前提ではない（既存グラフを
+   辿るだけで、`xen/` のみの現状カバレッジでも動く）が、スキーマの手戻りを
+   避けるため B-3 完了後に着手するという既存の順序判断自体は妥当と判断し維持。
+
+## 2026-08-01 B-8: 別セッションからの指摘5点を実データ検証 → 実装仕様を確定
+
+ADR-0008 に対し、並行作業中のもう一方のセッションから実装時の懸念5点の
+フィードバックを受領。着手前に全点を実データ（`analysis/xen-full/` の
+Relationship 全1445件 / `software_File` 1518件）で一次確認した。
+
+**結論: 5点すべて指摘は妥当。うち2点は指摘より深刻、1点は数値を訂正。**
+
+1. `dependsOn`/`ancestorOf` の扱い → **指摘より深刻**。両者は性質が全く異なる。
+   `dependsOn`(2件) は `software_File` → `software_File` の直接エッジ
+   （`config_data.S→config.gz`、`compile.h→{compile.h.in, .banner,
+   process-banner.sed}`）。決定的なのは **`tools/process-banner.sed` が
+   `hasInput` を1本も持たない**こと — `hasInput`/`hasOutput` だけを辿る実装では
+   このファイルが完全にグラフから消え、確実な偽陰性になる。よって必須。
+   逆に `ancestorOf`(1件) は `o:3` → 583 `build_Build` 全件のグルーピング
+   エッジで、トレーサビリティ用ではない。含めると影響範囲が全件に発散するため
+   明示的に除外。
+2. インデックスの向き → 指摘の通り。`hasInput` は `from: Build, to: [File]` の
+   ため、ソース起点の探索には `to` 側索引が必須。`to`/`from` 両方を作る。
+3. `hasDeclaredLicense` 混入 → 指摘の通り。`File → LicenseExpression` で279件
+   （全体の約19%）。ブラックリストではなく
+   **`hasInput`/`hasOutput`/`dependsOn` のホワイトリスト**方式を採用。
+4. 同名ファイル曖昧性 → 指摘は妥当だが**数値を訂正**。フルパスは1518件中
+   重複0（一意）。ベース名衝突は207種で `built_in.o` は5箇所ではなく**42件**。
+   相対パス完全一致を正とし、ベース名検索は候補提示に留める。
+5. 「該当なし」の曖昧さ → 指摘の通りで、かつ**罠がもう一段深い**。SBOM 内の
+   `tools/` 6件は `xen/tools/`（ハイパーバイザーのビルド補助スクリプト:
+   `binfile`, `compat-build-*.py`, `process-banner.sed` 等）であり、B-3 が
+   対象とする `xen.git/tools/`（`xl`/`libxl` 等 autotools ユーザ空間）とは
+   **全くの別名前空間**。`tools/binfile` はヒットするのに `tools/xl/xl.c` は
+   0件になるため、プレフィックスが同じに見えて「ヒットしない=影響なし」と
+   誤読する危険が単なるカバレッジ外より高い。SBOM に存在しないパスは
+   `UNKNOWN / OUT-OF-COVERAGE` として警告＋非ゼロ終了コードで返す仕様とし、
+   「影響なし」とは決して表示しない。
+
+`worklog/decisions.md` に **ADR-0009** として検証結果と確定仕様を記録し、
+`worklog/backlog.md` の B-8 に実装仕様4項目と完了条件への反映を行った。

@@ -104,3 +104,139 @@
   スコープ）ため、Linux には無い追加作業（B-3）が必要になる、というのが
   正しい理解。誤った先例への言及は、読者に「upstream が既に解決策を提示して
   いる」という誤解を与えるため、要出典なき記述は残さない方針で全箇所修正した。
+
+## ADR-0008: B-8（トレーサビリティ照会）が前提とする relationshipType の訂正
+- **日付**: 2026-08-01
+- **状態**: 採用（訂正）
+- **背景**: ADR-0005（B-8起票）および `worklog/backlog.md` の B-8 項目は、
+  生成済み SPDX JSON-LD が「成果物 → 入力ソース」の関係を `contains`/
+  `generatedFrom` という `relationshipType` で持っていると記述していたが、
+  これは実際の生成物を確認せずに書かれた未検証の記述だった。
+- **確認方法**: `analysis/xen-full/sbom-build.spdx.json`（`--fail-on-unknown`
+  ありの完全版 PoC 出力）と `analysis/xen-full/sbom-output.spdx.json` を実際に
+  読み、`Relationship` 要素の `relationshipType` を集計・個々の `from`/`to`
+  を実データで追跡した。
+- **判明した事実**:
+  1. 使われている `relationshipType` は `hasOutput`（583）・`hasInput`
+     （580）・`hasDeclaredLicense`（279）・`dependsOn`（2、`.incbin` 由来）・
+     `ancestorOf`（1）・`hasDistributionArtifact`（output文書側）。
+     `contains`/`generatedFrom` は**1件も存在しない**。
+  2. 実際のグラフ形は `software_File --(hasInput)--> build_Build
+     --(hasOutput)--> software_File` の繰り返し連鎖。ファイル同士が直接
+     `contains`/`generatedFrom` で結ばれているのではなく、`build_Build`
+     （1コマンド1ノード）を必ず経由する。
+  3. 連鎖の最上流（root artifact側）では `sbom-output.spdx.json` の
+     `o:` 接頭辞IDへ越境参照する（例:
+     `b:1523 hasOutput → o:5`＝`prelink.o`）。トレーサビリティ照会ツールは
+     `sbom-build.spdx.json` 単独ではなく `sbom-output.spdx.json` も読み、
+     ID接頭辞をまたいで解決する必要がある。
+  4. 逆引き（ソース→成果物）の実現可能性を実測で確認: 共通ヘッダ
+     `include/xen/bitops.h` は346個の `build_Build` の入力になっており
+     （多数の `.c` から include されるため）、想定内の fan-out。
+     `Relationship` 一覧（全1445件）を一度スキャンして
+     ファイル名→`spdxId`、`spdxId`→関連`Relationship`の逆引きインデックスを
+     作れば、任意のソースファイルからのグラフ探索は軽量に実装できる。
+- **決定**: `worklog/backlog.md` の B-8 項目を、実測した `relationshipType`
+  名（`hasInput`/`hasOutput`）とグラフ形（`build_Build`経由・文書間越境参照）
+  に基づいて訂正した。B-3 は技術的な必須前提ではない
+  （既存グラフを辿るだけのツールであるため、`xen/` のみの現状カバレッジでも
+  動作する）が、スキーマの手戻りを避けるため B-3 完了後に着手する、という
+  既存の順序判断自体は妥当と判断し維持した。
+- **理由**: relationshipType 名を誤って設計・実装の前提にすると、
+  `query_traceability.py` 実装時に存在しないエッジ種別を探して空振りする
+  （＝着手後すぐに手戻りする）ため、着手前の事実確認で先に訂正する方が安価。
+  ADR-0007 と同種の「未検証の言及が複数箇所に伝播する」パターンであり、
+  再発防止のため一次データ（生成済みJSON-LD）を直接確認する方針を踏襲した。
+
+## ADR-0009: B-8 実装仕様の確定（ADR-0008 への指摘5点の検証結果）
+- **日付**: 2026-08-01
+- **状態**: 採用
+- **背景**: ADR-0008（B-8の前提となる relationshipType の訂正）に対し、並行作業中の
+  もう一方のセッションから実装時の懸念5点のフィードバックを受けた。いずれも
+  「実装後に踏むと手戻りになる」類のため、着手前に実データ
+  （`analysis/xen-full/sbom-build.spdx.json` 全1445 Relationship / 1518 File）で
+  一次確認し、B-8 の実装仕様として確定させる。
+
+### 検証結果（5点すべて指摘は妥当。うち2点は指摘より深刻、1点は数値を訂正）
+
+1. **`dependsOn`/`ancestorOf` の扱い — 指摘より深刻。`dependsOn` は必須。**
+   実体を確認したところ両者は全く性質が異なる。
+   - `dependsOn`（2件）は **`software_File` → `software_File`** の直接エッジで、
+     `build_Build` を経由しない。内訳は
+     (a) `common/config_data.S → common/config.gz`（`.incbin` 由来）、
+     (b) `include/xen/compile.h → {compile.h.in, .banner, tools/process-banner.sed}`。
+   - 決定的な事実: **`tools/process-banner.sed` は `hasInput` エッジを1本も持たない**
+     （hasInput出現数0）。つまり `hasInput`/`hasOutput` のみを辿る実装では、この
+     ファイルを照会すると「影響を受ける成果物なし」と返る = **確実な偽陰性**。
+     `dependsOn` は件数が少ないから無視してよい、ではなく **無視すると特定の
+     ファイルが完全にグラフから消える**。逆引きロジックに必ず含める。
+   - `ancestorOf`（1件）は逆に **トレーサビリティ用エッジではない**。
+     `from: o:3`（output文書側のルート `build_Build`）→ `to:` 583件の
+     `build_Build` 全部、という単なるグルーピング／文書構造エッジ
+     （`completeness: complete` 付き）。探索に含めると全 `build_Build` が
+     1ホップで繋がってしまい、影響範囲が無意味に全件へ発散する。**明示的に除外**する。
+
+2. **逆引きインデックスは `to` 側で作る — 指摘の通り。**
+   `hasInput` は `from: build_Build`, `to: [software_File, ...]`（Buildが主語）。
+   したがってソースファイル起点の逆引きは「`to` 配列に当該 `spdxId` を含む
+   Relationship を探す」形になる。`from` だけをキーにインデックスを作ると
+   `hasInput` の検索が常に空振りする。実装では
+   `to`側索引（`spdxId → [Relationship]`）と `from`側索引の**両方**を作り、
+   辿る方向ごとに使い分ける。
+   - 上流方向（この成果物は何から作られたか）: Build の `hasInput` を `from` 索引で引く
+   - 下流方向（このソースは何に影響するか）: File の `spdxId` を `to` 索引で引いて
+     Build を得る → その Build の `hasOutput` を `from` 索引で引いて成果物を得る
+   - `dependsOn` は File→File のため `to` 索引で引くと下流方向になる（向きが
+     `hasInput` と揃うので同じ探索ループに載せられる）
+
+3. **`hasDeclaredLicense` は必ず relationshipType でフィルタ — 指摘の通り。**
+   実体は `from: software_File` → `to: simplelicensing_LicenseExpression`
+   （例: `include/xen/stdint.h → GPL-2.0-only`）。279件と全体の約19%を占め、
+   `from` 側索引を無フィルタで作ると各ファイルから `LicenseExpression` へ
+   1ホップ生えるため、探索結果に無関係なライセンス要素が「影響を受ける成果物」
+   として混入する。探索対象の relationshipType は
+   **`hasInput` / `hasOutput` / `dependsOn` の3種のみ**にホワイトリスト化する
+   （ブラックリストではなくホワイトリスト。将来 upstream が新種を足しても
+   意図せず混入しないため）。
+
+4. **ファイル指定は相対パス完全一致のみ — 指摘は妥当、ただし数値を訂正。**
+   実測では `software_File` 1518件に対し `name` のユニーク数も1518件で
+   **フルパスの重複は0件**。一方 **ベース名の衝突は207種**あり、
+   `built_in.o` は**42件**（フィードバックの「5箇所」は主要な `built_in.o` の
+   数であり、実際にはサブディレクトリ分を含め42件）。他に `private.h` 9件、
+   `xen.h`・`grant_table.h` 各7件など。
+   → 照会APIは **obj-tree 相対パスの完全一致**を正とする。ベース名での検索を
+   提供する場合は「複数ヒット時は候補一覧を提示して曖昧なまま結果を返さない」
+   仕様とし、暗黙に先頭1件を選ぶ実装は禁止。
+
+5. **「該当なし」とカバレッジ外の区別 — 指摘の通りで、かつ想定より罠が深い。**
+   FuSa の変更管理で使う以上、偽陰性が最も危険という指摘に同意。加えて実データで
+   **パス名前空間の落とし穴**を発見した:
+   - SBOM 内のパスは obj-tree（`external/xen/xen/`）相対。トップレベルディレクトリ
+     の内訳は `arch` 719, `include` 337, `common` 211, `drivers` 151, `lib` 89,
+     **`tools` 6**, `xsm` 3。
+   - この **`tools/` 6件は `xen/tools/`**（ハイパーバイザーのビルド補助スクリプト:
+     `binfile`, `combine_two_binaries.py`, `compat-build-*.py`, `compat-xlat-header.py`,
+     `process-banner.sed`）であり、**B-3 が対象とする `xen.git/tools/`**
+     （`xl`, `libxl`, `console` 等の autotools ユーザ空間）とは**全くの別物**。
+   - つまり利用者が `tools/...` を照会したとき、`tools/binfile` はヒットするのに
+     `tools/xl/xl.c` は0件になる。プレフィックスが同じに見えるため、
+     「ヒットしない = 影響がない」と誤読する危険が単なるカバレッジ外より高い。
+   → **決定**: 照会ツールは結果が空のとき、必ず次を区別して報告する。
+     (a) SBOM に当該パスが `software_File` として存在し、かつ下流エッジが無い
+         → 真に「影響を受ける成果物なし」（例: 最終成果物そのもの）
+     (b) SBOM に当該パスが存在しない → **`UNKNOWN / OUT-OF-COVERAGE` として
+         警告付きで返す**（終了コードも成功と分ける）。「影響なし」とは絶対に
+         表示しない。
+     (c) 併せて、現在の SBOM カバレッジ範囲（obj-tree のルートと、
+         `xen/` ハイパーバイザーのみで `xen.git/tools/`・`libs/` は B-3 未完了に
+         つき対象外である旨）を出力に明記する。
+
+- **決定**: 上記1〜5を B-8 の実装仕様として確定し、`worklog/backlog.md` の B-8
+  完了条件に反映する。特に (1) `dependsOn` 必須・`ancestorOf` 除外、
+  (3) relationshipType ホワイトリスト、(5) カバレッジ外の明示的区別の3点は
+  完了条件に含める。
+- **理由**: いずれも実装してから気づくと探索ロジックとインデックス構造の作り直しに
+  なる。特に (5) は FuSa の文脈で偽陰性を生む安全上の欠陥であり、機能ではなく
+  仕様として最初から埋め込む必要がある。ADR-0007・ADR-0008 に続き、記述ではなく
+  一次データ（生成済み JSON-LD）で確認する方針を継続した。

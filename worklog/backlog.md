@@ -83,19 +83,58 @@ B-2 の必要性を調べた結果、当初の「P1・FuSa 直結」は**推論�
 - 完了条件: arm ビルドでも未知コマンド 0 に近い結果を確認、差分を文書化。
 
 ### B-8 ⬜ P2 — SBOM ↔ ソースコード トレーサビリティ照会の仕組み
-- 生成済み SPDX JSON-LD は既に「成果物 → 入力ソース」の関係を持つ
-  （`prelink.o` から辿れる `contains`/`generatedFrom` 系）。これを
-  **逆方向（ソースファイル → 影響を受けるビルド成果物・パッケージ）**に
-  照会できる簡易ツール（例: `scripts/xen-sbom-poc/query_traceability.py`）
-  を用意する。
+- 生成済み SPDX JSON-LD は既に「成果物 → 入力ソース」の関係を持つ。
+  **訂正（2026-08-01、ADR-0008）**: 具体的な `relationshipType` は
+  `contains`/`generatedFrom` ではなく **`hasInput`/`hasOutput`**（`build_Build`
+  ↔ `software_File` 間）。`analysis/xen-full/sbom-build.spdx.json` で実測:
+  `hasOutput` 583件・`hasInput` 580件・`hasDeclaredLicense` 279件・`dependsOn`
+  2件・`ancestorOf` 1件（`contains`/`generatedFrom` は0件、そもそも未使用）。
+  グラフ形は `software_File --(hasInput)--> build_Build --(hasOutput)-->
+  software_File` の繰り返しで、末端（root artifact側）は `sbom-output.spdx.json`
+  側の `o:`接頭辞IDへ越境参照する。この向きを逆にたどれば
+  **逆方向（ソースファイル → 影響を受けるビルド成果物・パッケージ）**の照会が
+  作れる（実測: 共通ヘッダ `include/xen/bitops.h` は346個の `build_Build` の
+  入力になっており、fan-outは想定内の規模）。照会できる簡易ツール
+  （例: `scripts/xen-sbom-poc/query_traceability.py`）を用意する。
 - ユースケース: 「この `.c` ファイルを変更したら、どの SBOM 上のパッケージ／
   成果物が影響を受けるか」を FuSa の変更管理プロセスから参照できるように
   する（B-2 の Safety Case リンクとは別に、コード変更影響のトレーサビリティ
   そのものを扱う）。
 - 前提: B-1（外部バリデーション）で SBOM の関係性が正しいことを確認済みで
-  あることが望ましい。
-- 完了条件: 任意のソースファイルパスを入力すると、依存する/依存される
-  SBOM 要素（ファイル・パッケージ）の一覧が得られる。
+  あることが望ましい（✅ 完了済み）。B-3（tools/libs カバレッジ）は技術的な
+  必須前提ではない（このツールは既存グラフをそのまま辿るだけで、`xen/` のみの
+  現状カバレッジでも動く）が、スキーマの手戻りを避けるため B-3 完了後に着手する
+  という順序上の判断は妥当。
+- **実装仕様（2026-08-01 確定、ADR-0009 — 別セッションからの指摘5点を実データで
+  検証した結果）**:
+  1. 探索する relationshipType は **`hasInput` / `hasOutput` / `dependsOn` の3種
+     のみをホワイトリスト**指定する。
+     - `dependsOn`（File→File の直接エッジ、2件）は**必須**。
+       `tools/process-banner.sed` は `hasInput` エッジを1本も持たず
+       `dependsOn` 経由でしか到達できないため、除外すると確実な偽陰性になる。
+     - `ancestorOf`（1件）は**除外**。`o:3` → 583 `build_Build` 全件という
+       文書構造上のグルーピングエッジであり、含めると影響範囲が全件に発散する。
+     - `hasDeclaredLicense`（279件、File→LicenseExpression）は探索対象外。
+       フィルタしないと結果にライセンス要素が混入する。
+  2. 逆引きインデックスは **`to` 側索引と `from` 側索引の両方**を作る。
+     `hasInput` は `from: build_Build, to: [File]`（Buildが主語）のため、
+     ソース起点の下流探索は `to` 側索引が必要。`from` だけで索引を作ると
+     `hasInput` の検索が常に空振りする。
+  3. ファイル指定は **obj-tree 相対パスの完全一致**。フルパスは一意
+     （1518件中重複0）だがベース名衝突は207種あり `built_in.o` は42件存在する。
+     ベース名検索を提供する場合は複数ヒット時に候補一覧を返し、暗黙に先頭を
+     選ばない。
+  4. 結果が空のとき、**「影響なし」と「カバレッジ外」を必ず区別**する（FuSa
+     観点で最重要 / 偽陰性防止）。SBOM に `software_File` として存在しない
+     パスは `UNKNOWN / OUT-OF-COVERAGE` として警告＋非ゼロ終了コードで返す。
+     特に SBOM 内の `tools/` 6件は `xen/tools/`（ハイパーバイザーのビルド補助
+     スクリプト）であり、B-3 対象の `xen.git/tools/`（`xl`/`libxl` 等の
+     autotools ユーザ空間）とは別物のため、プレフィックスが同じに見えて
+     誤読を招きやすい。出力に現在のカバレッジ範囲を明記する。
+- 完了条件: 任意のソースファイルパスを入力すると、`hasInput`/`hasOutput`/
+  `dependsOn` を辿って依存する/依存される SBOM 要素（`build_Build`・ファイル・
+  パッケージ）の一覧が得られる。かつ上記実装仕様の 1（ホワイトリストと
+  `dependsOn` 対応）・4（カバレッジ外の明示的区別）を満たすこと。
 
 ### B-7 ✅ P2 — 再現手順書（英語版）の作成
 - `docs/ja/05-reproduction-runbook.md`（2026-07-08 作成、日本語版のみ）の内容を
