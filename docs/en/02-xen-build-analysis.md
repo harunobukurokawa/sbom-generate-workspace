@@ -65,8 +65,33 @@ naming (`x86`, `arm`) must be mapped.
 
 `tools/`, `stubdom/`, and the `libs/` live under autotools (`configure.ac`,
 `configure`) plus hand-written Makefiles/`tools/Rules.mk`. They do **not**
-generate `.cmd` files, so the cmd-graph approach cannot see them. Options
-(in the spirit of the upstream KernelSbom `sbom_analysis/` helpers):
+generate `.cmd` files, so the cmd-graph approach cannot see them.
+
+> **Correction (2026-08-01):** an earlier version of this section said this
+> followed "the spirit of the upstream KernelSbom `sbom_analysis/` helpers".
+> Checking `external/linux/scripts/sbom/` shows no such mechanism or
+> directory exists upstream (only `cmd_graph/`, `spdx/`, `spdx_graph/`,
+> `tests/` are present; the official `Documentation/tools/sbom/sbom.rst` does
+> not mention any strace-based fallback either). KernelSbom has no facility
+> for parts of a build that lack `.cmd` files — it simply treats them as
+> out of scope (Linux's own `make sbom` target only targets Kbuild-produced
+> roots, so this gap never surfaces for Linux itself). See ADR-0007 in
+> `worklog/decisions.md`. The options below are this project's own proposal,
+> not an upstream precedent:
+
+**Comparison (verified 2026-08-01):** whether `.cmd` exists is determined by
+"Kbuild vs. autotools", not "Linux vs. Xen". The Xen hypervisor core (`xen/`)
+is Kbuild-derived, so it falls on the same side as the Linux kernel and the
+existing cmd-graph approach applies unchanged. The gap is limited to
+`tools/`/`libs/`.
+
+| | Linux kernel (`make sbom`) | Xen `xen/` (hypervisor core) | Xen `tools/`/`libs/` |
+|---|---|---|---|
+| Build system | Kbuild (emits `.cmd`) | **Kbuild-derived** (emits `.cmd`) | autoconf/automake (does **not** emit `.cmd`) |
+| `.cmd` examples | `arch/x86/boot/.bzImage.cmd`, etc. | `.prelink.o.cmd`, `common/.built_in.o.cmd`, etc. (confirmed on a real build) | Effectively zero (e.g. `libxl`). The 468 `.cmd` files found under `tools/` all come from `tools/firmware/xen-dir/xen-root/` (a nested, separate Kbuild build for firmware) and are unrelated to the autotools parts |
+| KernelSbom scope | Roots are only `bzImage` + `.ko`, so the target is 100% `.cmd`-covered by construction | Root is `prelink.o`, so the same cmd-graph approach is directly reusable | N/A (the target is outside `.cmd` coverage entirely) |
+| Extra work needed for Xen | — | Not B-3. Only parser extensions (`xen_parsers.py`: `mv`/`compat-*.py`/`.banner` families, already implemented, zero unknown commands) | **B-3**. Needs a separate mechanism (strace / `compile_commands.json`), not yet implemented |
+| Does the gap surface? | No (scope is designed to match `.cmd` coverage exactly) | No (same reason as Linux — `xen/` is Kbuild-derived too) | Yes (the desired Xen-wide scope includes territory with no `.cmd` at all) |
 
 - **compile_commands.json** (via `bear` or a compiler wrapper) to recover
   per-file compile inputs.

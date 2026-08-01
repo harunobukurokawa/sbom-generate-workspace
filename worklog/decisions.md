@@ -79,3 +79,28 @@
   以外の逸脱は無く、生成データ自体の妥当性を確認できた。詳細と再現手順は
   `docs/{en,ja}/06-external-validation.md`、再現スクリプトは
   `scripts/validate-spdx.sh`。
+
+## ADR-0007: 「KernelSbom の `sbom_analysis/`」という記述の訂正（実在しない）
+- **日付**: 2026-08-01
+- **状態**: 採用（訂正）
+- **背景**: `worklog/journal.md`（フェーズ0の事前 Web 調査時点）、
+  `docs/{en,ja}/02-xen-build-analysis.md` §3、`docs/{en,ja}/03-xen-spdx-design.md`
+  §3 の3箇所で、tools/libs（autotools 系、`.cmd` 非対応）向けの strace/
+  `compile_commands.json` 方式を「上流 KernelSbom 自身の `sbom_analysis/` に
+  倣う」と記述していた。ユーザーからの指摘を受けて `external/linux/scripts/sbom/`
+  を再確認したところ、そのようなディレクトリ・機構は実在しない
+  （実在するのは `cmd_graph/`, `spdx/`, `spdx_graph/`, `tests/` のみ）。公式文書
+  `Documentation/tools/sbom/sbom.rst` にも strace ベースの代替手段への言及は無い。
+- **決定**: 3箇所すべての記述を訂正し、「upstream に前例が無く、本プロジェクト
+  独自の提案である」旨を明記した。合わせて、tools/libs が実際に `.cmd` を
+  生成しないことを再検証した（`tools/libxl` 等の autotools コンポーネントは
+  `.cmd` 0件。`tools/` 配下で見つかる468件の `.cmd` はすべて
+  `tools/firmware/xen-dir/xen-root/` — ファームウェア用にネストされた別の
+  Kbuild ビルド — 由来で、autotools 部分とは無関係。B-3 の前提は正しい）。
+- **理由**: KernelSbom は `.cmd` の無い部分を補完する機能を持たず、単に
+  スコープ外として扱う設計である。Linux の `make sbom` はそもそも Kbuild
+  産物のみをルートにするため、このギャップは Linux 自身では表面化しない。
+  一方 Xen は tools/libs も含めてカバレッジを広げたい（本プロジェクトの
+  スコープ）ため、Linux には無い追加作業（B-3）が必要になる、というのが
+  正しい理解。誤った先例への言及は、読者に「upstream が既に解決策を提示して
+  いる」という誤解を与えるため、要出典なき記述は残さない方針で全箇所修正した。

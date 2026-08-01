@@ -81,10 +81,15 @@ Xen の**機能安全（FuSa）**（IEC 61508 / ISO 26262、Xen FuSa SIG）を�
   固有コマンドを登録する薄い `xen_parsers/` を追加。カーネルの `make sbom` ターゲット
   同様に駆動し、ルート = `prelink.o`（将来、2パスリンクが記録可能なコマンドを出すように
   なれば `xen-syms` も）。これが**主たる・ほぼ完全な**成果物であり FuSa の中心。
-- **[B] tools/libs（新規・粗粒度）:** `.cmd` が無い。**strace** のファイルオープン追跡
-  （ビルドシステム非依存、上流 KernelSbom の `sbom_analysis/` に倣う）または
-  `compile_commands.json`（`bear` 経由）で、少なくともパッケージ/ファイル単位の SBOM を
-  生成。後段に延期。
+- **[B] tools/libs（新規・粗粒度）:** `.cmd` が無い（2026-08-01 再検証: `tools/libxl` 等
+  autotools 系コンポーネントに `.cmd` は0件。`tools/` 配下で見つかる468件の `.cmd` は
+  すべて `tools/firmware/xen-dir/xen-root/` — ファームウェア用にネストされた別の
+  Kbuild ビルド — に由来し、autotools 部分とは無関係）。**strace** のファイルオープン
+  追跡（ビルドシステム非依存）または `compile_commands.json`（`bear` 経由）で、少なくとも
+  パッケージ/ファイル単位の SBOM を生成。後段に延期。
+  *（訂正: 以前は「上流 KernelSbom の `sbom_analysis/` に倣う」としていたが、そのような
+  機構は upstream に存在しない。ADR-0007 参照。この[B]自体は upstream の前例ではなく
+  本プロジェクト独自の提案。）*
 - **[C] Safety Case リンカ（新規）:** 生成 SBOM を Safety Case 成果物に紐付ける SPDX
   Relationships を出力する後処理（§4）。
 

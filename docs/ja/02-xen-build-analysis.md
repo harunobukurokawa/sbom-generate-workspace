@@ -63,7 +63,30 @@ Xen の最終リンクターゲットは異なり（`xen-syms`, `xen.efi`, `xen`
 
 `tools/`, `stubdom/`, `libs/` は autotools（`configure.ac`, `configure`）+ 手書き
 Makefile/`tools/Rules.mk` の下にあり、`.cmd` を生成**しません**。したがって cmd グラフ
-方式では捕捉できません。選択肢（上流 KernelSbom の `sbom_analysis/` の発想に沿う）:
+方式では捕捉できません。
+
+> **訂正（2026-08-01）:** 以前の版はここで「上流 KernelSbom の `sbom_analysis/` の
+> 発想に沿う」と記載していたが、`external/linux/scripts/sbom/` を確認した結果、その
+> ような機構・ディレクトリは upstream に**存在しない**（実在するのは `cmd_graph/`,
+> `spdx/`, `spdx_graph/`, `tests/` のみ。公式文書 `Documentation/tools/sbom/sbom.rst`
+> にも strace ベースの代替手段への言及は無い）。KernelSbom は `.cmd` の無い部分を
+> 補完する機能を持たず、単にスコープ外として扱う（Linux の `make sbom` が対象とする
+> ルート成果物はそもそも Kbuild 産物のみのため、Linux 自身ではこのギャップが表面化
+> しない）。詳細は `worklog/decisions.md` ADR-0007。以下の選択肢は本プロジェクト独自の
+> 提案であり、upstream の前例ではない:
+
+**比較（2026-08-01 検証）**: `.cmd` の有無は「Linux か Xen か」ではなく「Kbuild か
+autotools か」で決まる。Xen ハイパーバイザー本体（`xen/`）は Kbuild 由来のため
+Linux kernel と同じ側に入り、既存の cmd グラフ手法がそのまま通用する。ギャップが
+あるのは `tools/`・`libs/` だけである。
+
+| | Linux kernel（`make sbom`） | Xen `xen/`（ハイパーバイザー本体） | Xen `tools/`・`libs/` |
+|---|---|---|---|
+| ビルド方式 | Kbuild（`.cmd` を出す） | **Kbuild 由来**（`.cmd` を出す） | autoconf/automake（`.cmd` を**出さない**） |
+| `.cmd` の実例 | `arch/x86/boot/.bzImage.cmd` 等 | `.prelink.o.cmd`, `common/.built_in.o.cmd` 等（実ビルドで確認済み） | 実質0件（`libxl` 等）。`tools/` 配下で見つかる468件は `tools/firmware/xen-dir/xen-root/`（ファームウェア用にネストされた別の Kbuild ビルド）由来で、autotools 部分とは無関係 |
+| KernelSbom のスコープ | `bzImage` + `.ko` のみをルートに指定 → 対象は最初から100% `.cmd` で覆われる範囲 | `prelink.o` をルートに指定 → 同じ `.cmd` グラフ手法がそのまま再利用可能 | 該当なし（対象範囲がそもそも `.cmd` の外） |
+| Xen 向け追加作業 | — | B-3 ではない。パーサ拡張のみ（`xen_parsers.py`: `mv`/`compat-*.py`/`.banner` 等の3系統、実装済み・未知コマンド0件） | **B-3**。strace／`compile_commands.json` による別機構が必要（未実装） |
+| ギャップの表面化 | しない（スコープと `.cmd` カバレッジが最初から一致するよう設計） | しない（`xen/` も Kbuild 由来のため Linux と同じ理由でギャップなし） | する（Xen 全体をカバーしたいスコープに対し `.cmd` が無い領域が実在する） |
 
 - **compile_commands.json**（`bear` またはコンパイララッパ経由）でファイル毎の
   コンパイル入力を復元。

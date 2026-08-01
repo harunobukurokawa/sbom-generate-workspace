@@ -47,7 +47,11 @@
 - Xen のハイパーバイザー（`xen/`）は Linux Kbuild 由来のビルドシステムを採用しており、
   `.cmd` 機構が流用しやすい見込み。
 - Xen の tools / libs は autotools + 素の Makefile 系で `.cmd` が無いため、別手法
-  （compile_commands.json / strace ベース追跡 = KernelSbom の `sbom_analysis/` 相当）が必要。
+  （compile_commands.json / strace ベース追跡）が必要。
+  → **訂正（2026-08-01、ADR-0007）**: 「KernelSbom の `sbom_analysis/` 相当」という
+  部分は誤り。`external/linux/scripts/sbom/` に実在せず、公式文書にも言及が無い未検証の
+  記述だった。strace/compile_commands.json 自体の方針は妥当だが、upstream の前例では
+  なく本プロジェクト独自の提案として扱う。
 
 **計画**
 - 承認済み計画: `/home/kurokawa/.claude/plans/humming-chasing-peach.md`
@@ -401,3 +405,37 @@ git-ignore 済みのため実害はない）。
   `built_in.o`/`lib.a` → `prelink.o`（`.cmd`あり）→ `xen-syms`/`xen`
   （`.cmd`なし）の関係を図示。`docs/en/03-xen-spdx-design.md` と
   `docs/ja/03-xen-spdx-design.md` のRoot artifact節から参照リンクを追加。
+
+## 2026-08-01 「`sbom_analysis/`」記述の訂正 + B-3 の真意の再確認・比較表追加
+
+ユーザーから、`docs/{en,ja}/02-xen-build-analysis.md` §3・`03-xen-spdx-design.md`
+§3・本ファイル（フェーズ0の事前調査記録）にあった「tools/libs 向け strace 方式は
+上流 KernelSbom 自身の `sbom_analysis/` に倣う」という記述について、真偽の確認と
+修正を依頼された。
+
+1. `external/linux/scripts/sbom/` を確認したところ、`sbom_analysis/` という
+   ディレクトリ・機構は**存在しない**（実在するのは `cmd_graph/`, `spdx/`,
+   `spdx_graph/`, `tests/` のみ）。公式文書 `Documentation/tools/sbom/sbom.rst`
+   にも strace ベースの代替手段への言及は無い。フェーズ0の事前 Web 調査時点の
+   未検証の記述がそのまま3箇所の設計文書に伝播していたと判明。
+2. 上記4箇所（`docs/ja/02`, `docs/en/02`, `docs/ja/03`, `docs/en/03`）を訂正し、
+   「upstream の前例ではなく本プロジェクト独自の提案」である旨を明記。
+   `worklog/decisions.md` に **ADR-0007** を新規追加し、訂正の経緯・理由を記録。
+3. 合わせて、tools/libs が実際に `.cmd` を生成しないという前提自体を再検証:
+   `external/xen/tools/libxl` 等の autotools コンポーネントに `.cmd` は0件。
+   `tools/` 配下で見つかる468件の `.cmd` は `tools/firmware/xen-dir/xen-root/`
+   （ファームウェア用にネストされた別の Kbuild ビルド）由来で、autotools 部分
+   とは無関係と確認。B-3 の前提（tools/libs は `.cmd` を持たない）は事実として
+   正しい。
+4. B-3 の真意をユーザーと整理: `.cmd` の有無は「Linux か Xen か」ではなく
+   「Kbuild か autotools か」で決まる。Xen ハイパーバイザー本体（`xen/`）は
+   Kbuild 由来のため Linux kernel と同じ側に入り、既存の cmd グラフ手法が
+   そのまま通用する（Xen 固有の3コマンドパーサ追加は「手法の再利用」の範囲内
+   であり B-3 ではない）。ギャップがあるのは `tools/`・`libs/` だけであり、これは
+   KernelSbom の前提（Kbuild の `.cmd`）そのものが成立しない領域であるため、
+   Linux には無い追加作業が必要になる — というのが B-3 の正確な位置づけ。
+   Linux kernel／Xen `xen/`（ハイパーバイザー本体）／Xen `tools/`・`libs/` の
+   3列比較表を作成し、`docs/{en,ja}/02-xen-build-analysis.md` §3 に追記した。
+
+次: ユーザーの指示により B-8（SBOM ↔ ソースコード トレーサビリティ照会）の
+再確認に着手する。

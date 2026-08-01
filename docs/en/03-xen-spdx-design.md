@@ -85,10 +85,17 @@ mapping `x86`/`arm`) would take the hypervisor SBOM from ~99% to complete.
   it like the kernel's `make sbom` target: roots = `prelink.o` (and, once the
   two-pass link emits a recordable command, `xen-syms`). This is the **primary,
   near-complete** deliverable and the FuSa focus.
-- **[B] tools/libs (new, coarser):** these have no `.cmd` files. Use **strace**
-  file-open tracking (build-system-agnostic, mirrors upstream KernelSbom's own
-  `sbom_analysis/`) or `compile_commands.json` (via `bear`) to produce at least a
-  package/file-level SBOM. Deferred to a later phase.
+- **[B] tools/libs (new, coarser):** these have no `.cmd` files (re-verified
+  2026-08-01: autotools components such as `tools/libxl` have zero `.cmd`
+  files; the 468 `.cmd` files found under `tools/` all come from
+  `tools/firmware/xen-dir/xen-root/` — a nested, separate Kbuild build used
+  for firmware — and are unrelated to the autotools parts). Use **strace**
+  file-open tracking (build-system-agnostic) or `compile_commands.json` (via
+  `bear`) to produce at least a package/file-level SBOM. Deferred to a later
+  phase.
+  *(Correction: this previously said it "mirrors upstream KernelSbom's own
+  `sbom_analysis/`" — no such mechanism exists upstream. See ADR-0007. [B]
+  itself is this project's own proposal, not an upstream precedent.)*
 - **[C] Safety Case linker (new):** post-process step that emits SPDX
   Relationships tying the generated SBOM to Safety Case artefacts (see §4).
 
