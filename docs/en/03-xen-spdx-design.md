@@ -22,7 +22,9 @@ hypervisor (`4.23-unstable`, `x86_64_defconfig`, built in **23 s**). Driver:
   two-pass symbol-table link recipe that does **not** emit a `.cmd` file, so it
   cannot be a root. `prelink.o` aggregates every `built_in.o`
   (`common/ drivers/ lib/ xsm/ arch/x86/`) plus arch libs and **does** have
-  `.prelink.o.cmd`, so it covers the hypervisor core end-to-end.
+  `.prelink.o.cmd`, so it covers the hypervisor core end-to-end. See
+  [`docs/img/xen-build-prelink.drawio`](../img/xen-build-prelink.drawio) for a
+  diagram of `prelink.o` → `xen-syms` → `xen` and where `.cmd` coverage stops.
 - **Invocation:** in-tree build ⇒ `--src-tree == --obj-tree`, so no separate
   source document is produced (source files are folded into the build document).
   Passed `--do-not-fail-on-unknown-build-command` + `--write-output-on-error`.

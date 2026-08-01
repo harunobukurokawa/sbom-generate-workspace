@@ -378,3 +378,26 @@ tools/libs 用のファイル/パッケージ単位 SBOM を生成するコレ�
 サンドボックス制約で私からは削除できないため、ユーザー側で
 `rm -rf external/xen-tools-build` により削除可能（`external/` は
 git-ignore 済みのため実害はない）。
+
+## 2026-08-01 prelink.o と xen-syms/xen の関係を実ビルドで確認・説明図を追加
+
+「Xenビルド時にprelink.oが生成されるとレポートがあるが、正しいですか？」という
+質問を受け、`external/xen/xen/` の実ビルド成果物（`prelink.o`、`.prelink.o.cmd`、
+`xen-syms`、`xen`）を直接確認して裏取りした。
+
+- `prelink.o` は存在し、`.prelink.o.cmd` の中身は
+  `ld -melf_x86_64 -r -o prelink.o common/built_in.o drivers/built_in.o
+  lib/built_in.o xsm/built_in.o arch/x86/built_in.o --start-group
+  arch/x86/lib/lib.a arch/x86/lib/cpu-policy/lib.a lib/lib.a --end-group`
+  であることを実ファイルで確認（`docs/en|ja/03-xen-spdx-design.md` の記述と一致）。
+- `prelink.o` は最終成果物 `xen`（`xen-syms` 経由）そのものではなく、その手前の
+  中間生成物であることを `arch/x86/Makefile` の `$(TARGET)-syms` レシピで確認。
+  `ld` → `nm` → `tools/symbols` を3回繰り返す2パスのシンボルテーブル生成を単一
+  Makeルール内で行い、中間ファイル（`.xen-syms.0`〜`.2`）は最後に `rm` されるため
+  Kbuildの `.cmd` ファイルが一切残らない（実際に `.xen-syms*.cmd` が存在しない
+  ことも確認）。これが `prelink.o` を SBOM のroot artifactに選んだ設計判断の
+  裏付けとなった。
+- 参考資料として `docs/img/xen-build-prelink.drawio` を新規作成し、
+  `built_in.o`/`lib.a` → `prelink.o`（`.cmd`あり）→ `xen-syms`/`xen`
+  （`.cmd`なし）の関係を図示。`docs/en/03-xen-spdx-design.md` と
+  `docs/ja/03-xen-spdx-design.md` のRoot artifact節から参照リンクを追加。

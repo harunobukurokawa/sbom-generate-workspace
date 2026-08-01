@@ -21,6 +21,8 @@ Xen の**機能安全（FuSa）**（IEC 61508 / ISO 26262、Xen FuSa SIG）を�
   リンクで生成され `.cmd` を**出力しない**ためルートにできない。`prelink.o` は全
   `built_in.o`（`common/ drivers/ lib/ xsm/ arch/x86/`）+ arch libs を集約し、
   `.prelink.o.cmd` を**持つ**ため、ハイパーバイザーコアを端から端まで網羅する。
+  `prelink.o` → `xen-syms` → `xen` の流れと `.cmd` 網羅範囲の境界を図示した
+  [`docs/img/xen-build-prelink.drawio`](../img/xen-build-prelink.drawio) を参照。
 - **起動:** in-tree ビルド ⇒ `--src-tree == --obj-tree` のため独立した source 文書は
   生成されない（ソースは build 文書に統合）。
   `--do-not-fail-on-unknown-build-command` + `--write-output-on-error` を付与。
