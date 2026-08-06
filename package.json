@@ -1,0 +1,35 @@
+{
+  "name": "xen-sbom-tree-sitter",
+  "version": "1.5.0",
+  "description": "Xen SBOM generation with tree-sitter-bash integration for complex shell command parsing",
+  "main": "src/shell_parser.js",
+  "scripts": {
+    "test": "node scripts/xen-sbom-poc/tests/test_tree_sitter_parser.py",
+    "parse": "node src/shell_parser.js",
+    "test:python": "python3 -m pytest scripts/xen-sbom-poc/tests/test_tree_sitter_parser.py -v"
+  },
+  "keywords": [
+    "xen",
+    "sbom",
+    "shell",
+    "parser",
+    "tree-sitter",
+    "build-system"
+  ],
+  "author": "harunobu.kurokawaのGitHubアカウント",
+  "license": "GPL-2.0+",
+  "dependencies": {
+    "tree-sitter": "^0.20.0",
+    "tree-sitter-bash": "^0.20.0"
+  },
+  "devDependencies": {
+    "tree-sitter-cli": "^0.20.0"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/harunobukurokawa/sbom-generate-workspace.git"
+  }
+}
