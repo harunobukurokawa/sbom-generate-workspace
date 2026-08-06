@@ -65,8 +65,18 @@ B-2 の必要性を調べた結果、当初の「P1・FuSa 直結」は**推論�
 - 完了条件: SBOM + Safety Case を結合した SPDX 文書を自動生成でき、バリデータで pass。
 
 ### B-3 ⬜ P2 — tools/libs コレクタ（Xen 全体カバレッジ）
-- `.cmd` を持たない `tools/`・`libs/`・`stubdom/` を strace もしくは
-  compile_commands.json（bear）で収集し、パッケージ/ファイル単位 SBOM を生成。
+- `.cmd` を持たない `tools/`・`libs/`・`stubdom/` からビルドコマンドを採取し、
+  パッケージ/ファイル単位 SBOM を生成する。
+- 採取方式は決定済み: `scripts/xen-sbom-poc/run-xen-tools-build.sh`。make の
+  `SHELL` を `bash -x` に差し替え、`PS4` で全コマンドの直前に `$PWD` を出力させて
+  作業ディレクトリ付きのコマンドトレースを取る（`-j1`）。当初案の strace は
+  `execve` のみでは cwd を約18%しか復元できず不採用、bear もシステムパッケージ
+  依存のため見送り（経緯はスクリプト冒頭コメントと `worklog/journal.md`）。
+- ブロック中: サンドボックスが `config/` への書き込みを拒否するため `./configure`
+  を私の側から実行できない。**ユーザーが手元のシェルで上記スクリプトを実行し、
+  `analysis/xen-tools-poc/xen-tools-build.trace.log` とビルド済み
+  `external/xen/tools/` を用意する**のが次のアクション。
+- 未着手部分: そのトレースを解析してコレクタ本体を実装する。
 - 完了条件: hypervisor 以外の主要コンポーネントの SBOM が生成できる。
 
 ### B-4 ⬜ P2 — xen/ への `make sbom` 相当ターゲット統合（CI 再現）
