@@ -131,6 +131,31 @@ def _parse_binfile(command: str) -> list[PathStr]:
 _COMBINE_FILE_OPTS = {"--script", "--bin1", "--bin2", "--map"}
 
 
+def _parse_ld_command(command: str) -> list[PathStr]:
+    """Parse `ld` (GNU linker) commands to extract object/archive inputs.
+
+    Extracts files ending in .o, .a from the linker command line.
+    Example: aarch64-linux-gnu-ld -r input1.o input2.o -o output.o
+    """
+    inputs = []
+    try:
+        parts = tokenize_single_command(command, flag_options=[
+            "-r", "-e", "-T", "-u", "-X", "-x", "-E", "-G", "-rpath",
+            "-Map", "-Bstatic", "-Bdynamic", "-soname", "-rpath-link"
+        ])
+        for p in parts:
+            if isinstance(p, Positional):
+                # File ends with .o, .a, .so, etc.
+                if any(p.value.endswith(ext) for ext in ('.o', '.a', '.so', '.ld')):
+                    inputs.append(p.value)
+    except Exception:
+        # Fallback: simple regex extraction
+        for token in shlex.split(command):
+            if any(token.endswith(ext) for ext in ('.o', '.a', '.so', '.ld')):
+                inputs.append(token)
+    return inputs
+
+
 def _parse_combine_two_binaries(command: str) -> list[PathStr]:
     parts = tokenize_single_command(command)
     inputs = [
@@ -144,10 +169,64 @@ def _parse_combine_two_binaries(command: str) -> list[PathStr]:
     return script + inputs
 
 
+# tree-sitter-bash integration for complex shell commands (MUST be before XEN_COMMAND_PARSERS)
+try:
+    from tree_sitter_parser import TreeSitterCommandParser
+    _TREE_SITTER_AVAILABLE = True
+except ImportError:
+    _TREE_SITTER_AVAILABLE = False
+    TreeSitterCommandParser = None
+
+
+def _parse_complex_shell_command(command: str) -> list[PathStr]:
+    """Parse complex shell commands using tree-sitter-bash.
+
+    Handles if-then-else, while loops, pipes, and other shell constructs
+    that regex-based parsers cannot reliably parse.
+    """
+    if not _TREE_SITTER_AVAILABLE or TreeSitterCommandParser is None:
+        return []
+
+    try:
+        parser = TreeSitterCommandParser()
+        result = parser.parse(command)
+
+        # Extract inputs from parsed command and branches
+        inputs = set(result.inputs)
+
+        # Also extract from control flow branches (then/else/while bodies)
+        parsed_data = result.parsed_data
+        if parsed_data.get("has_conditionals"):
+            # Pattern to extract file arguments from common build commands
+            # e.g., -r file.o, -o output.o, < input.c, > output.txt
+            for branch_cmd in shlex.split(command):
+                # Skip common non-file tokens
+                if branch_cmd in ("if", "then", "else", "fi", "do", "done", "while"):
+                    continue
+                # Common file patterns
+                if any(branch_cmd.endswith(ext) for ext in ('.o', '.c', '.h', '.S', '.s', '.a', '.so')):
+                    inputs.add(branch_cmd)
+
+        return sorted(list(inputs))
+    except Exception:
+        # Fall back to basic regex extraction
+        files = []
+        for token in shlex.split(command):
+            if any(token.endswith(ext) for ext in ('.o', '.c', '.h', '.S', '.s', '.a', '.so', '.ld')):
+                files.append(token)
+        return files
+
+
 # Registry entries. Patterns are matched (re.match, anchored at start) before the
 # upstream entries, so keep the Xen-specific ones first. `.*` tolerates a leading
 # interpreter path.
 XEN_COMMAND_PARSERS = [
+    # tree-sitter-bash for complex shell constructs (if/while/pipes/logical ops)
+    # This must come BEFORE simple patterns to catch complex commands early
+    (re.compile(r".*(if\s+\[|then\s|else\s|fi\b|while\s|do\b|done\b|for\s|\|\s|\&\&|\|\|)"),
+     _parse_complex_shell_command) if _TREE_SITTER_AVAILABLE else None,
+    # GNU ld linker commands - extract .o, .a inputs
+    (re.compile(r".*aarch64-linux-gnu-ld\b|.*ld\b"), _parse_ld_command),
     (re.compile(r"^mv\b"), _parse_mv_command),
     (re.compile(r".*compat-[\w-]+\.py"), _parse_compat_tool),
     (re.compile(r".*combine_two_binaries\.py"), _parse_combine_two_binaries),
@@ -158,6 +237,9 @@ XEN_COMMAND_PARSERS = [
     (re.compile(r".*\|\s*figlet\b"), _parse_noop),
     (re.compile(r"^else\s+echo\b"), _parse_noop),
 ]
+
+# Filter out None entries (if tree-sitter not available)
+XEN_COMMAND_PARSERS = [entry for entry in XEN_COMMAND_PARSERS if entry is not None]
 
 
 # Xen's *.init.o recipe prepends a section-size validation loop

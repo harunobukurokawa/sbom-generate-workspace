@@ -104,10 +104,10 @@ class ShellParser {
           if (child.type === 'condition' || child.text.startsWith('[')) {
             condition = child.text;
           } else if (child.type === 'then_clause' ||
-                    (child.type === 'command' && node.children[node.children.indexOf(child) - 1]?.text === 'then')) {
+                    (child.type === 'command' && node.children[node.children.indexOf(child) - 1] && node.children[node.children.indexOf(child) - 1].text === 'then')) {
             then_body.push(child.text);
           } else if (child.type === 'else_clause' ||
-                    (child.type === 'command' && node.children[node.children.indexOf(child) - 1]?.text === 'else')) {
+                    (child.type === 'command' && node.children[node.children.indexOf(child) - 1] && node.children[node.children.indexOf(child) - 1].text === 'else')) {
             else_body.push(child.text);
           }
         }
