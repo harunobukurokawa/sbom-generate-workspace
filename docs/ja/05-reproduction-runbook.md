@@ -52,6 +52,12 @@
 | Xen ハイパーバイザービルド          | **23秒**    | x86_64_defconfig                  |
 | Xen PoC（無改変ツール）             | 数秒〜数十秒      | ビルド済み前提                    |
 | Xen 完全版 SBOM 生成                | 数秒〜数十秒      | ビルド済み前提                    |
+| **arm64** ハイパーバイザービルド    | **8.0秒**   | `arm64_defconfig`、`make clean` 後の真のクリーンビルド、`-j12` |
+| **arm64** SBOM 生成                 | **0.8秒**   | ビルド済み前提、303 個の `.cmd` を解析 |
+
+arm64 の2行は12コア環境での実測（`make clean` が `prelink.o`・`.cmd`・`built_in.o`
+をすべて削除することを確認した上で計測）。ハイパーバイザー本体は規模が小さいため、
+ビルドも SBOM 生成も Linux カーネルとは桁違いに速い。
 
 ## 2. 全体の流れ
 
@@ -72,8 +78,14 @@ scripts/xen-sbom-poc/run-xen-poc.sh      ──► Xen PoC（無改変ツール�
 scripts/xen-sbom-poc/generate-xen-sbom.sh ──► Xen 完全版 SBOM（未知コマンド0件）
         │
         ▼
+（手順6）arm64 でクロスビルド + SBOM 生成 ──► arm64 SBOM（未知コマンド0件）
+        │
+        ▼
 （検証）JSON-LD の構造確認 + 単体テスト実行
 ```
+
+手順1〜5 は x86_64、手順6 は arm64。手順6 は手順1（ソース取得）だけを前提とし、
+手順2〜5 とは独立に実行できる。
 
 ## 3. 手順1: ソース取得
 
@@ -205,10 +217,102 @@ scripts/xen-sbom-poc/generate-xen-sbom.sh    # ROOT_ARTIFACT=prelink.o（省略�
   できないだけでパース自体は成功している）
 
 **もし exit code が非0、または unknown-command occurrences が0でない場合:**
-再現に失敗している。手順6（ビルド）が正しく完了しているか、`prelink.o` が
+再現に失敗している。手順3（ビルド）が正しく完了しているか、`prelink.o` が
 最新か（ビルドをやり直した場合は `.cmd` も更新されているか）を確認する。
 
-## 8. 検証: 単体テストの実行
+## 8. 手順6: arm64 版での再現（クロスビルド）
+
+手順1〜5 は x86_64 が対象。ここでは arm64 で同じことを行う。詳細な分析は
+`docs/ja/07-arm64-parser-gap-analysis.md` にある。
+
+### 8.1 追加で必要なツール
+
+```bash
+sudo apt-get install -y gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu
+```
+
+実績: `aarch64-linux-gnu-gcc 11.4.0`、`aarch64-linux-gnu-ld` (binutils 2.38)。
+Node.js は本ブランチでは**不要**（未採用の tree-sitter 実験用であり、そちらは
+`experiment/tree-sitter-bash` ブランチにある）。
+
+### 8.2 ビルド
+
+```bash
+make -C external/xen/xen XEN_TARGET_ARCH=arm64 arm64_defconfig
+CROSS_COMPILE=aarch64-linux-gnu- make -C external/xen/xen XEN_TARGET_ARCH=arm64 -j"$(nproc)"
+```
+
+**期待される結果:**
+
+- `external/xen/xen/prelink.o`（実績: 約16MB）と `.prelink.o.cmd` が存在する
+- `.cmd` ファイル数は実績 **303個**（x86_64 の 624個より少ない。有効な機能が異なるため）
+
+> **重要: ビルド後に `make clean` を実行しないこと。** 本ツールは*ビルド後*に
+> ディスク上の中間ファイル（`common/built_in.o` 等）をハッシュ化するため、
+> クリーンすると SBOM 生成に失敗する。
+
+### 8.3 SBOM 生成
+
+```bash
+python3 scripts/xen-sbom-poc/gen_xen_sbom.py \
+    external/linux/scripts/sbom  external/xen/xen  analysis/arm64  prelink.o
+```
+
+> **最重要の注意点: 第2引数はハイパーバイザーディレクトリ（`external/xen/xen`）で
+> あり、Xen リポジトリの root（`external/xen`）ではない。** `.cmd` 内のパスは
+> ハイパーバイザーのビルドディレクトリ相対で記録されているため、1階層でもずれると
+> 全入力が存在しないパスへ解決され、**追跡ファイル1件だけの SBOM** ができあがる。
+> これは実際に発生し、原因の特定に相当の時間を要した
+> （`docs/ja/07-arm64-parser-gap-analysis.md` の2節）。
+>
+> 現在はこの誤りを検出する警告が入っている。以下が出たら第2引数を見直すこと:
+>
+> ```
+> [WARNING] obj-tree <...> has no .config, but <...>/xen/.config does.
+>           ... pass <...>/xen instead.
+> ```
+
+**期待される結果（実績値）:**
+
+- `analysis/arm64/sbom-build.spdx.json`: **1,951 elements**（約1.4MB）
+  - `software_File` 894 / `Relationship` 758 / `build_Build` 290 /
+    `simplelicensing_LicenseExpression` 5 / その他4
+- `analysis/arm64/sbom.used-files.txt`: `wc -l` が **894** を出力する
+  （末尾に改行が無いため。実際に列挙されているパスは **895個**）
+  - 拡張子別: `.h` 359 / `.c` 222 / `.o` 281 / `.S` 19 / `.a` 2
+  - 895個のうち `software_File` 要素になるのは894個。差の1個は `prelink.o` で、
+    これはルート成果物のため `sbom-output.spdx.json` 側に置かれる
+  - `../../../usr/bin/dash` という項目が入る（`/bin/sh` の実体）。コード生成を
+    実行したシェル自身が依存として追跡されたもので、異常ではない
+- 未知コマンド **0件**
+- 想定内の警告:
+  - `All 1 parsed input(s) were dropped ... .banner.tmp` — **1件のみ**なら正常
+    （一時ファイルのため）。多数出る場合は第2引数の階層ずれを疑う
+  - `Could not infer primary purpose for ...` — 実績10件（型を推定できないだけ）
+
+`gen_xen_sbom.py` は fail-on-unknown で動作するため、**出力ファイルが生成された
+こと自体が「未知コマンド0件」の証明**になる。
+
+**確認コマンド例:**
+
+```bash
+wc -l analysis/arm64/sbom.used-files.txt
+grep -E "flask/policy" analysis/arm64/sbom.used-files.txt
+```
+
+後者は XSM/FLASK のポリシーファイル5件（`mkflask.sh`, `security_classes`,
+`initial_sids`, `mkaccess_vector.sh`, `access_vectors`）を表示する。これらは
+arm64 で追加したパーサーが機能している証拠であり、x86_64 の SBOM には現れない
+（`arm64_defconfig` が XSM/FLASK を有効化するため）。
+
+### 8.4 x86_64 との差分の要点
+
+arm64 で追加が必要だったのは **XSM/FLASK ポリシーコード生成のパーサー1個のみ**。
+これは arch の差ではなく**コンフィグの差**であり、`aarch64-linux-gnu-*` の
+コンパイラ・リンカコマンド自体は上流パーサーがそのまま処理できる。詳細と
+測定手順は `docs/ja/07-arm64-parser-gap-analysis.md`。
+
+## 9. 検証: 単体テストの実行
 
 Xen 拡張パーサ自体の単体テストも実行し、実装が壊れていないことを確認する。
 
@@ -217,9 +321,14 @@ PYTHONPATH=external/linux/scripts/sbom:scripts/xen-sbom-poc \
     python3 -m pytest scripts/xen-sbom-poc/tests/ -q
 ```
 
-**期待される結果:** 全9件のテストが pass する（`worklog/journal.md` 記載の実績）。
+**期待される結果:** **21 passed**（2026-08-06 時点の実績）。skip も failed も無い。
 
-## 9. 検証: 生成された SPDX 文書の中身を自分の目で確認する
+- **failed が1件でもあれば再現失敗**。
+- skip が出る場合は `experiment/tree-sitter-bash` ブランチにいる可能性が高い。
+  同ブランチは未採用の tree-sitter 実験を含み、そのテストを意図的に skip している
+  （`docs/ja/07-arm64-parser-gap-analysis.md` の4.5節）。
+
+## 10. 検証: 生成された SPDX 文書の中身を自分の目で確認する
 
 `run-linux-sbom.sh` が Linux 側で自動実行している検証と同じ考え方を、Xen 側の
 出力にも手動で適用できる。
@@ -253,25 +362,26 @@ PY
 - ログに本書「期待される警告」以外の `[WARNING]`（特に `no matching parser` や
   `IfBlock` 関連）が新規に出ていないこと
 
-## 10. 既知の限界（社外報告時に明記すべき事項）
+## 11. 既知の限界（社外報告時に明記すべき事項）
 
 再現手順自体は成功しても、以下は**未実施・未確立**であることを認識し、報告時に
 過大に主張しないよう注意する（`worklog/backlog.md` 参照、状態は本書作成時点）。
 
-- **外部 SPDX バリデータでの検証は未実施**（backlog B-1）。現状の「妥当性確認」は
-  JSON-LD の構造チェック（`@graph` の存在・要素数のカウント）のみであり、SPDX の
-  公式ツール（例: `pyspdxtools`）による正式なスキーマ検証は行っていない。
-  カスタム JSON-LD `@context` の展開が前提条件として必要。
 - **`tools/`・`libs/`・`stubdom/` は未対応**（backlog B-3）。本手順書がカバーするのは
   ハイパーバイザー本体（`xen/`）のみ。
 - **Safety Case とのリンク（backlog B-2）は保留中**。SPDX 3.1 の Safety Profile が
   まだ Release Candidate 段階であり、Xen FuSa SIG 側でも SBOM/SPDX 活用の必要性が
   文書上は未確認のため。`analysis/xen-safety-case-relationships.example.spdx.json`
   はあくまで例示であり、生成 SBOM と自動的に紐付いてはいない。
-- **arm/arm64 での検証は未実施**（backlog B-6）。本書の手順・数値はすべて x86_64。
+- **arm64 は検証済み**（backlog B-6、2026-08-06 完了。手順6 = 8節）。ただし **arm32
+  は未検証**。arm64 で追加が必要だったのは XSM/FLASK パーサー1個のみで、これは
+  arch 差ではなくコンフィグ差だった（`docs/ja/07-arm64-parser-gap-analysis.md`）。
+- **他の defconfig での網羅性は未確認**（backlog B-11）。arm64 の知見から、欠落は
+  「有効化された機能」に依存すると分かったため、`x86_64` + XSM/FLASK 有効など
+  他のコンフィグでは未知コマンドが残る可能性がある。
 - CI 組み込み（backlog B-4）や上流貢献（backlog B-5）も未着手。
 
-## 11. 社外説明のための要点（参考）
+## 12. 社外説明のための要点（参考）
 
 Xen コミュニティ等への説明時に接続すべき骨子（詳細は `worklog/journal.md` 末尾の
 「総括」を参照）:
@@ -279,10 +389,11 @@ Xen コミュニティ等への説明時に接続すべき骨子（詳細は `wo
 - **問い:** Linux v7 に入った SPDX-SBOM ツール（`scripts/sbom/`）を Xen 自身の SPDX
   自動生成に再利用できるか。
 - **答え（本書の再現で確認できること）:** ハイパーバイザー本体については、上流
-  ツールを無改変のまま直接適用できる（手順6の PoC）。約200行の実行時注入拡張
+  ツールを無改変のまま直接適用できる（手順4の PoC）。約200行の実行時注入拡張
   （`xen_parsers.py`）を加えると、未知コマンド0件・exit 0 の完全な SBOM が得られる
-  （手順7）。
+  （手順5）。
 - **根拠:** Xen の `xen/` は Linux Kbuild 由来で `fixdep.c` が同一形式の `.cmd` を
   出力するため、KernelSbom の依存グラフ解析がそのまま通る。
-- **残作業:** 外部バリデータ検証、`tools/`・`libs/` の補完、Safety Case リンクの
-  正式化（上記10節）。
+- **残作業:** `tools/`・`libs/` の補完（バックログ B-3）と Safety Case リンクの
+  正式化（B-2、B-0 待ちで保留）。外部バリデータ検証は**完了済み**
+  （`docs/{en,ja}/06-external-validation.md` 参照）。

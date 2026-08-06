@@ -63,6 +63,35 @@ scripts/xen-sbom-poc/run-xen-poc.sh          # baseline: UNMODIFIED tool, tolera
 scripts/xen-sbom-poc/generate-xen-sbom.sh    # complete SBOM: Xen extensions, fail-on-unknown → analysis/xen-full/
 ```
 
+arm64 cross-build (verified, B-6). The **second argument is the hypervisor
+directory, not the repo root** — `.cmd` paths are relative to it, and being one
+level off silently resolves every input to a nonexistent path:
+
+```bash
+make -C external/xen/xen XEN_TARGET_ARCH=arm64 arm64_defconfig
+CROSS_COMPILE=aarch64-linux-gnu- make -C external/xen/xen XEN_TARGET_ARCH=arm64 -j"$(nproc)"
+python3 scripts/xen-sbom-poc/gen_xen_sbom.py \
+    external/linux/scripts/sbom external/xen/xen analysis/arm64 prelink.o
+```
+
+Validate output with the official SPDX tools (deps pinned in
+`scripts/validate-spdx-requirements.txt`). `--with` merges the documents'
+`@graph` first, which is needed because `sbom-build` references three nodes
+that live in `sbom-output`:
+
+```bash
+scripts/validate-spdx.sh --with analysis/xen-full/sbom-build.spdx.json \
+                                analysis/xen-full/sbom-output.spdx.json
+```
+
+Capture the `tools/`/`libs/` build for the future B-3 collector. **Tell the user
+to run this in their own shell** — `./configure` must create a directory named
+`config`, which the Bash sandbox hard-denies:
+
+```bash
+scripts/xen-sbom-poc/run-xen-tools-build.sh   # → analysis/xen-tools-poc/*.log
+```
+
 Run the unit tests for the Xen parsers:
 
 ```bash
@@ -107,8 +136,15 @@ hypervisor core.
 `scripts/xen-sbom-poc/xen_parsers.py` injects three things:
 1. **Xen command parsers** prepended to `DEFAULT_COMMAND_PARSER_REGISTRY`
    (`mv`, the `compat-*.py` codegen family, `combine_two_binaries.py`, `binfile`,
-   bare `cat`, figlet/else no-ops). Patterns are `re.match`-anchored and Xen
-   entries go first.
+   the XSM/FLASK policy codegen `mkflask.sh`/`mkaccess_vector.sh`, bare `cat`,
+   figlet/else no-ops). Patterns are `re.match`-anchored and Xen entries go
+   first. **Keep new patterns narrow**: because they are matched ahead of the
+   whole upstream registry, a loose pattern silently steals commands upstream
+   already handles — a regression that emits no warning. Two such entries were
+   measured and removed; see `docs/{en,ja}/07-arm64-parser-gap-analysis.md`.
+   The XSM/FLASK entry is only exercised by configs that enable XSM/FLASK
+   (`arm64_defconfig` does, x86_64 `defconfig` does not), which is why it was
+   invisible until the arm64 run.
 2. A **replacement `parse_inputs_from_commands`** that (a) keeps the *then-branch*
    inputs of shell `if..then..fi` blocks — Xen uses one to generate
    `include/xen/compile.h` — instead of dropping them, and (b) strips the
@@ -124,6 +160,13 @@ that actually exist on disk (`_keep_existing`). Xen's "generate `X.new` then
 non-file paths a post-build SBOM cannot hash. Unit tests set `OBJ_TREE = None`
 to disable this.
 
+That filter is also the main misconfiguration trap, so it self-diagnoses: a
+wrong `--obj-tree` makes *every* input resolve to a nonexistent path, and
+returning `[]` in silence reads as a parser defect. `_keep_existing` therefore
+warns when a non-empty input set is emptied, and `_validate_obj_tree()` runs
+from `install_xen_extensions()` before the graph is built, suggesting
+`<OBJ_TREE>/xen` when it finds the `.config` one level down.
+
 Any change to a parser's input-extraction logic should be mirrored by a case in
 `tests/test_xen_parsers.py`, which uses the **exact command strings observed in
 the real Xen build** (captured under `analysis/xen-poc/`).
@@ -132,6 +175,10 @@ the real Xen build** (captured under `analysis/xen-poc/`).
 
 Generated SBOMs and run logs are kept selectively under `analysis/`
 (`xen-poc/` = baseline, `xen-full/` = complete). `analysis/*.example.spdx.json`
-and `analysis/sample-*` are illustrative snapshots, not build output. Validation
-so far is JSON-LD structural only; external SPDX-tool validation requires
-expanding the custom JSON-LD `@context` (a tracked backlog item, B-1).
+and `analysis/sample-*` are illustrative snapshots, not build output.
+
+Validation is no longer structural-only: B-1 is done. `scripts/validate-spdx.sh`
+runs the official `check-jsonschema` and `pyshacl` against the generated
+documents, and no local `spdx-3-model` checkout or manual "`@context` expansion"
+step turned out to be needed. Results and the two known benign caveats are in
+`docs/{en,ja}/06-external-validation.md`.

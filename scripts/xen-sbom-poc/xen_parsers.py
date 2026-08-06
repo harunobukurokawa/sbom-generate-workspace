@@ -131,6 +131,33 @@ def _parse_binfile(command: str) -> list[PathStr]:
 _COMBINE_FILE_OPTS = {"--script", "--bin1", "--bin2", "--map"}
 
 
+def _parse_flask_codegen(command: str) -> list[PathStr]:
+    """Parse Xen's XSM/FLASK policy code generators:
+
+        /bin/sh <script>.sh <awk> <output_dir> <policy_file>...
+
+    e.g. `/bin/sh ./xsm/flask/policy/mkflask.sh awk xsm/flask/include \\
+          ./xsm/flask/policy/security_classes ./xsm/flask/policy/initial_sids`
+
+    Inputs are the generator script and the policy definition files. The awk
+    interpreter name and the output *directory* are skipped -- note the latter
+    must be excluded explicitly, because OBJ_TREE's `os.path.exists` filter
+    accepts directories and would otherwise let it through as a "file".
+
+    These commands only appear when XSM/FLASK is enabled, which arm64_defconfig
+    does and x86_64 defconfig does not -- hence they were absent from the
+    original x86 PoC. See docs/ja/07-arm64-parser-gap-analysis.md.
+    """
+    positionals = [
+        p.value for p in tokenize_single_command(command) if isinstance(p, Positional)
+    ]
+    script = next((p for p in positionals if p.endswith(".sh")), None)
+    if script is None:
+        return []
+    # positionals == [sh, script, awk, out_dir, policy...]; skip awk and out_dir.
+    return [script] + positionals[positionals.index(script) + 3:]
+
+
 def _parse_combine_two_binaries(command: str) -> list[PathStr]:
     parts = tokenize_single_command(command)
     inputs = [
@@ -147,11 +174,19 @@ def _parse_combine_two_binaries(command: str) -> list[PathStr]:
 # Registry entries. Patterns are matched (re.match, anchored at start) before the
 # upstream entries, so keep the Xen-specific ones first. `.*` tolerates a leading
 # interpreter path.
+#
+# Keep these patterns NARROW. Entries here are matched before the whole upstream
+# registry, so a loose pattern silently steals commands that upstream already
+# parses correctly (a regression that produces no warning). Two such entries were
+# measured and removed -- see docs/ja/07-arm64-parser-gap-analysis.md.
 XEN_COMMAND_PARSERS = [
     (re.compile(r"^mv\b"), _parse_mv_command),
     (re.compile(r".*compat-[\w-]+\.py"), _parse_compat_tool),
     (re.compile(r".*combine_two_binaries\.py"), _parse_combine_two_binaries),
     (re.compile(r".*tools/binfile\b"), _parse_binfile),
+    # XSM/FLASK policy codegen. arm64_defconfig enables XSM/FLASK; x86_64
+    # defconfig does not, so these are the arm64-only gap found by this PoC.
+    (re.compile(r".*xsm/flask/policy/mk(flask|access_vector)\.sh\b"), _parse_flask_codegen),
     (re.compile(r"^cat\s+[^|>]*$"), _parse_cat_bare),
     # .banner generation (a version string). No source-file provenance; figlet is
     # an optional decorative renderer, so these branches carry no build inputs.
@@ -181,7 +216,63 @@ OBJ_TREE: str | None = None
 def _keep_existing(paths: list[PathStr]) -> list[PathStr]:
     if OBJ_TREE is None:
         return paths
-    return [p for p in paths if os.path.exists(os.path.join(OBJ_TREE, p))]
+    kept = [p for p in paths if os.path.exists(os.path.join(OBJ_TREE, p))]
+
+    # Warn when a non-empty input set is emptied entirely. Dropping *some* inputs is
+    # normal (Xen's "generate X.new then mv to X" idiom), but dropping *all* of them
+    # usually means the paths are being resolved against the wrong root -- which is
+    # exactly how an --obj-tree off by one directory level manifests. Silently
+    # returning [] here once cost significant debugging time; see
+    # docs/ja/07-arm64-parser-gap-analysis.md section 2.1.
+    #
+    # Measured on a healthy arm64 build: 292 calls, 1 all-dropped (a genuine
+    # `.banner.tmp` transient). With a wrong --obj-tree: ~290 all-dropped. The
+    # logger collapses repeats of one template, so the healthy case is a single
+    # line while the broken case reports "Found N more instances" -- the count
+    # itself is the diagnostic.
+    if paths and not kept:
+        sbom_logging.warning(
+            "All {count} parsed input(s) were dropped because none exist under "
+            "obj-tree {obj_tree}: {paths}. If this repeats for most commands, "
+            "--obj-tree is probably wrong (for Xen it must be the hypervisor "
+            "build directory, e.g. <xen>/xen, not the repository root).",
+            count=str(len(paths)),
+            obj_tree=str(OBJ_TREE),
+            paths=", ".join(paths),
+        )
+    return kept
+
+
+def _validate_obj_tree() -> None:
+    """Sanity-check OBJ_TREE before the graph is built.
+
+    Catches the "--obj-tree points at the Xen repository root instead of the
+    hypervisor build directory" mistake up front, instead of letting it surface as
+    an SBOM that mysteriously contains a single file.
+    """
+    if OBJ_TREE is None:
+        return
+    if os.path.exists(os.path.join(OBJ_TREE, ".config")):
+        return  # looks like a configured build directory
+
+    # A .config one level down means the caller passed the repository root.
+    nested = os.path.join(OBJ_TREE, "xen", ".config")
+    if os.path.exists(nested):
+        sbom_logging.warning(
+            "obj-tree {obj_tree} has no .config, but {nested} does. Paths in .cmd "
+            "files are relative to the hypervisor build directory, so this is "
+            "almost certainly the wrong level -- pass {suggestion} instead.",
+            obj_tree=str(OBJ_TREE),
+            nested=nested,
+            suggestion=os.path.join(OBJ_TREE, "xen"),
+        )
+    else:
+        sbom_logging.warning(
+            "obj-tree {obj_tree} contains no .config; it does not look like a "
+            "configured Xen hypervisor build directory. Parsed inputs may fail to "
+            "resolve.",
+            obj_tree=str(OBJ_TREE),
+        )
 
 
 # --------------------------------------------------------------------------- #
@@ -254,6 +345,7 @@ def install_xen_extensions() -> None:
     """Inject the Xen parsers, the IfBlock-aware parser, and hardcoded deps into
     the already-imported upstream sbom package. Must run before the cmd graph is
     built (and before cmd_file is imported, so it picks up the patched function)."""
+    _validate_obj_tree()
     base_entries = list(CommandParserRegistry.create())
     savedcmd_parser.DEFAULT_COMMAND_PARSER_REGISTRY = CommandParserRegistry(
         XEN_COMMAND_PARSERS + base_entries

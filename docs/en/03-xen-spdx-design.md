@@ -43,7 +43,9 @@ Valid **SPDX 3.0.1** JSON-LD
 
 **Key outcome:** the tool traced the hypervisor from `prelink.o` back to **419 C
 source files, 505 headers, and 23 assembly files** — real, file-level provenance
-for the hypervisor core — with **only 6 unknown-command warnings**. Everything
+for the hypervisor core — with **only 6 unknown-command warnings**
+*(wrong: the real figure is 317 — see the Correction at the end of this
+section)*. Everything
 else (`gcc`, `ld`, `objcopy`, `nm`, `ar`, `strip`) was handled by the existing
 generic parsers, because `KernelSbom` derives those patterns from the toolchain
 environment variables rather than hardcoding kernel-only names.
@@ -62,6 +64,25 @@ The 6 warnings reduce to **three** command families not yet understood by
 
 Each is a Xen build-script idiom; adding three parser entries (plus arch-name
 mapping `x86`/`arm`) would take the hypervisor SBOM from ~99% to complete.
+
+> **Correction (2026-08-06):** two figures above are wrong. They are left in
+> place because the design that follows was written on top of them.
+>
+> 1. **"only 6 unknown-command warnings"**, and the per-family counts "(4×)"
+>    and "(2×)", cannot be reproduced from the captured run. KernelSbom's
+>    warning summariser in `analysis/xen-poc/xen-poc.run.log` prints three
+>    example commands followed by `... (Found 314 more instances of this
+>    warning)` — that is **317** skipped commands, plus the one unsupported
+>    `IfBlock`. The three command *families* named above are correct; the
+>    instance counts are not.
+> 2. **"adding three parser entries ... would take it to complete"**
+>    understated the work. `fail-on-unknown` stops at the first unparsed
+>    command, so each parser added let the graph descend one layer deeper and
+>    exposed the next Xen recipe. Reaching zero unknowns required the
+>    `compat-*` family, `combine_two_binaries.py`, `binfile`, bare `cat` and
+>    the `.banner` no-ops, **plus** an existence filter for Xen's "write
+>    `X.new`, then `mv`" idiom — ~200 lines in total. See
+>    `docs/{en,ja}/04-xen-parsers-implementation.md` and `worklog/journal.md`.
 
 ## 3. Proposed architecture
 
