@@ -210,7 +210,7 @@ class _CapturedWarnings:
 class TestKeepExistingWarnsOnTotalDrop(unittest.TestCase):
     """A wrong --obj-tree makes every parsed input resolve to a nonexistent path;
     _keep_existing() used to return [] in silence, which made the misconfiguration
-    look like a parser defect. See docs/*/06 section 2.1."""
+    look like a parser defect. See docs/*/07 section 2.1."""
 
     def setUp(self):
         self._saved = xen_parsers.OBJ_TREE
