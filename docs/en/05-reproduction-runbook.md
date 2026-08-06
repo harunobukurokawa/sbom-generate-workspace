@@ -417,6 +417,6 @@ similar external audiences (see the "summary" at the end of
 - **Rationale:** Xen's `xen/` derives from Linux Kbuild, and `fixdep.c`
   produces `.cmd` files in the same format, so KernelSbom's dependency-graph
   analysis works unchanged.
-- **Remaining work:** external validator verification, filling in `tools/`
-  and `libs/` coverage, and formalizing the Safety Case link (see Section 10
-  above).
+- **Remaining work:** filling in `tools/` and `libs/` coverage (backlog B-3) and
+  formalizing the Safety Case link (B-2, on hold pending B-0). External validator
+  verification is **done** — see `docs/{en,ja}/06-external-validation.md`.

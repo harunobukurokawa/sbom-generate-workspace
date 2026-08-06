@@ -394,5 +394,6 @@ Xen コミュニティ等への説明時に接続すべき骨子（詳細は `wo
   （手順5）。
 - **根拠:** Xen の `xen/` は Linux Kbuild 由来で `fixdep.c` が同一形式の `.cmd` を
   出力するため、KernelSbom の依存グラフ解析がそのまま通る。
-- **残作業:** 外部バリデータ検証、`tools/`・`libs/` の補完、Safety Case リンクの
-  正式化（上記11節）。
+- **残作業:** `tools/`・`libs/` の補完（バックログ B-3）と Safety Case リンクの
+  正式化（B-2、B-0 待ちで保留）。外部バリデータ検証は**完了済み**
+  （`docs/{en,ja}/06-external-validation.md` 参照）。

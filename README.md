@@ -36,14 +36,22 @@ community.
 - **Xen hypervisor PoC** (4.23-unstable, x86_64_defconfig, 23s build): the
   *unmodified* Linux `KernelSbom` produced a valid SPDX 3.0.1 build SBOM for the
   hypervisor core — **1,442 files traced** (419 `.c`, 505 `.h`, 23 `.S`) from
-  `prelink.o` — with **only 6 unknown-command warnings**. Gap to 100%: just
-  **three** small Xen-specific command parsers (`mv`, `compat-build-header.py`,
-  `compile.h`).
-- **Complete hypervisor SBOM (Phase B):** with ~200 lines of Xen extensions
+  `prelink.o`. The run skipped **317 commands** for want of a parser, plus one
+  unsupported `IfBlock` compound command (`analysis/xen-poc/xen-poc.run.log`).
+  Those instances surface **three** command families (`mv -f`,
+  `compat-build-header.py`, and the `compile.h` banner recipe) — but see below:
+  they were only the first layer.
+- **Complete hypervisor SBOM (Phase B):** closing the gap took more than those
+  three families. Each parser added let the graph descend further and exposed the
+  next Xen recipe (`combine_two_binaries.py`, `binfile`, bare `cat`, `.banner`
+  no-ops), plus an existence filter for Xen's "write `X.new`, then `mv`" idiom.
+  The result is ~200 lines of Xen extensions
   (`scripts/xen-sbom-poc/xen_parsers.py`, injected at runtime, upstream tool still
-  unmodified), the hypervisor SBOM reaches **zero unknown commands, exit 0**, now
-  covering **1,519 files** (+77: compat `.i`, xlat `.lst`, codegen `.py`, boot
-  `.bin`, compile.h.in, .banner). Valid SPDX 3.0.1; 9 unit tests pass.
+  unmodified) — today 8 registry entries over 7 parser functions, one of which
+  (XSM/FLASK codegen) is arm64-only. The hypervisor SBOM reaches **zero unknown
+  commands, exit 0**, covering **1,519 files** (+77: compat `.i`, xlat `.lst`,
+  codegen `.py`, boot `.bin`, compile.h.in, .banner). Valid SPDX 3.0.1;
+  **21 unit tests** pass.
 - **Conclusion:** the upstream tool is directly reusable for the Xen hypervisor.
   See `docs/{en,ja}/03-xen-spdx-design.md` for the architecture and Safety Case
   model, and `docs/{en,ja}/04-xen-parsers-implementation.md` for the parsers.
