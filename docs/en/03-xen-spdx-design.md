@@ -43,7 +43,9 @@ Valid **SPDX 3.0.1** JSON-LD
 
 **Key outcome:** the tool traced the hypervisor from `prelink.o` back to **419 C
 source files, 505 headers, and 23 assembly files** — real, file-level provenance
-for the hypervisor core — with **only 6 unknown-command warnings**. Everything
+for the hypervisor core — with **only 6 unknown-command warnings**
+*(wrong: the real figure is 317 — see the Correction at the end of this
+section)*. Everything
 else (`gcc`, `ld`, `objcopy`, `nm`, `ar`, `strip`) was handled by the existing
 generic parsers, because `KernelSbom` derives those patterns from the toolchain
 environment variables rather than hardcoding kernel-only names.
