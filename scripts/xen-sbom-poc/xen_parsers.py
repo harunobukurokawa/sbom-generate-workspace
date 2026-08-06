@@ -146,7 +146,7 @@ def _parse_flask_codegen(command: str) -> list[PathStr]:
 
     These commands only appear when XSM/FLASK is enabled, which arm64_defconfig
     does and x86_64 defconfig does not -- hence they were absent from the
-    original x86 PoC. See docs/ja/06-arm64-parser-gap-analysis.md.
+    original x86 PoC. See docs/ja/07-arm64-parser-gap-analysis.md.
     """
     positionals = [
         p.value for p in tokenize_single_command(command) if isinstance(p, Positional)
@@ -178,7 +178,7 @@ def _parse_combine_two_binaries(command: str) -> list[PathStr]:
 # Keep these patterns NARROW. Entries here are matched before the whole upstream
 # registry, so a loose pattern silently steals commands that upstream already
 # parses correctly (a regression that produces no warning). Two such entries were
-# measured and removed -- see docs/ja/06-arm64-parser-gap-analysis.md.
+# measured and removed -- see docs/ja/07-arm64-parser-gap-analysis.md.
 XEN_COMMAND_PARSERS = [
     (re.compile(r"^mv\b"), _parse_mv_command),
     (re.compile(r".*compat-[\w-]+\.py"), _parse_compat_tool),
@@ -223,7 +223,7 @@ def _keep_existing(paths: list[PathStr]) -> list[PathStr]:
     # usually means the paths are being resolved against the wrong root -- which is
     # exactly how an --obj-tree off by one directory level manifests. Silently
     # returning [] here once cost significant debugging time; see
-    # docs/ja/06-arm64-parser-gap-analysis.md section 2.1.
+    # docs/ja/07-arm64-parser-gap-analysis.md section 2.1.
     #
     # Measured on a healthy arm64 build: 292 calls, 1 all-dropped (a genuine
     # `.banner.tmp` transient). With a wrong --obj-tree: ~290 all-dropped. The

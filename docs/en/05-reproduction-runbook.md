@@ -59,6 +59,8 @@ formats or build commands.
 | Xen hypervisor build                 | **23 s**             | x86_64_defconfig                   |
 | Xen PoC (unmodified tool)            | A few to tens of seconds | Assumes build already done     |
 | Xen complete SBOM generation         | A few to tens of seconds | Assumes build already done     |
+| **arm64** hypervisor build           | **8.0 s**            | `arm64_defconfig`, true clean build after `make clean`, `-j12` |
+| **arm64** SBOM generation            | **0.8 s**            | Assumes build already done; parses 303 `.cmd` files |
 
 ## 2. Overall flow
 
@@ -77,6 +79,9 @@ scripts/xen-sbom-poc/run-xen-poc.sh      ──► Xen PoC (unmodified tool, war
         │
         ▼
 scripts/xen-sbom-poc/generate-xen-sbom.sh ──► Xen complete SBOM (zero unknown commands)
+        │
+        ▼
+(Step 6) arm64 cross-build + SBOM generation ──► arm64 SBOM (zero unknown commands)
         │
         ▼
 (Verification) JSON-LD structural check + unit tests
@@ -222,7 +227,104 @@ reproduction has failed. Check whether Step 5 (the build, i.e. Step 3 above)
 completed correctly and whether `prelink.o` is up to date (if you rebuilt, make
 sure `.cmd` files were also regenerated).
 
-## 8. Verification: running the unit tests
+## 8. Step 6: Reproducing on arm64 (cross-build)
+
+Steps 1–5 target x86_64. This step does the same on arm64. The detailed analysis is
+in `docs/en/07-arm64-parser-gap-analysis.md`.
+
+### 8.1 Additional tools
+
+```bash
+sudo apt-get install -y gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu
+```
+
+Actual: `aarch64-linux-gnu-gcc 11.4.0`, `aarch64-linux-gnu-ld` (binutils 2.38).
+Node.js is **not** required on this branch (it belongs to the unadopted tree-sitter
+experiment, which lives on `experiment/tree-sitter-bash`).
+
+### 8.2 Build
+
+```bash
+make -C external/xen/xen XEN_TARGET_ARCH=arm64 arm64_defconfig
+CROSS_COMPILE=aarch64-linux-gnu- make -C external/xen/xen XEN_TARGET_ARCH=arm64 -j"$(nproc)"
+```
+
+**Expected result:**
+
+- `external/xen/xen/prelink.o` (actual: ~16 MB) and `.prelink.o.cmd` exist
+- The `.cmd` file count is **303** (fewer than x86_64's 624, because a different set
+  of features is enabled)
+
+> **Important: do not run `make clean` afterwards.** This tool hashes the intermediate
+> files on disk (`common/built_in.o` and so on) *after* the build, so cleaning makes
+> SBOM generation fail.
+
+### 8.3 Generating the SBOM
+
+```bash
+python3 scripts/xen-sbom-poc/gen_xen_sbom.py \
+    external/linux/scripts/sbom  external/xen/xen  analysis/arm64  prelink.o
+```
+
+> **The most important detail: the second argument is the hypervisor directory
+> (`external/xen/xen`), not the root of the Xen repository (`external/xen`).** Paths
+> inside `.cmd` files are recorded relative to the hypervisor build directory, so being
+> off by even one level makes every parsed input resolve to a nonexistent path, and the
+> result is **an SBOM containing exactly one tracked file**. This actually happened, and
+> identifying the cause took considerable time (section 2 of
+> `docs/en/07-arm64-parser-gap-analysis.md`).
+>
+> A warning now detects the mistake. If you see this, re-check the second argument:
+>
+> ```
+> [WARNING] obj-tree <...> has no .config, but <...>/xen/.config does.
+>           ... pass <...>/xen instead.
+> ```
+
+**Expected result (actual):**
+
+- `analysis/arm64/sbom-build.spdx.json`: **1,951 elements** (~1.4 MB)
+  - `software_File` 894 / `Relationship` 758 / `build_Build` 290 /
+    `simplelicensing_LicenseExpression` 5 / 4 others
+- `analysis/arm64/sbom.used-files.txt`: `wc -l` prints **894** (there is no trailing
+  newline; the file actually lists **895 paths**)
+  - By extension: `.h` 359 / `.c` 222 / `.o` 281 / `.S` 19 / `.a` 2
+  - 894 of the 895 become `software_File` elements; the one difference is `prelink.o`,
+    the root artifact, which lives in `sbom-output.spdx.json`
+  - An entry `../../../usr/bin/dash` appears (the real path behind `/bin/sh`): the
+    shell that ran the codegen scripts, tracked as a dependency. Not an anomaly
+- Unknown commands: **0**
+- Expected warnings:
+  - `All 1 parsed input(s) were dropped ... .banner.tmp` — normal if it appears **only
+    once** (a temporary file). Many occurrences suggest the second argument is at the
+    wrong level
+  - `Could not infer primary purpose for ...` — 10 occurrences (type could not be
+    inferred only)
+
+Because `gen_xen_sbom.py` runs with fail-on-unknown, **the existence of the output
+files is itself proof of zero unknown commands.**
+
+**Example checks:**
+
+```bash
+wc -l analysis/arm64/sbom.used-files.txt
+grep -E "flask/policy" analysis/arm64/sbom.used-files.txt
+```
+
+The latter lists five XSM/FLASK policy files (`mkflask.sh`, `security_classes`,
+`initial_sids`, `mkaccess_vector.sh`, `access_vectors`). They are evidence that the
+parser added for arm64 works, and they do not appear in the x86_64 SBOM (because
+`arm64_defconfig` enables XSM/FLASK).
+
+### 8.4 What actually differs from x86_64
+
+arm64 required exactly **one additional parser, for XSM/FLASK policy code generation**.
+That is a **configuration** difference rather than an architecture one: the
+`aarch64-linux-gnu-*` compiler and linker commands are handled by the upstream parsers
+as they stand. For the details and the measurement method, see
+`docs/en/07-arm64-parser-gap-analysis.md`.
+
+## 9. Verification: running the unit tests
 
 Also run the unit tests for the Xen extension parsers themselves, to confirm
 the implementation is not broken.
@@ -232,9 +334,14 @@ PYTHONPATH=external/linux/scripts/sbom:scripts/xen-sbom-poc \
     python3 -m pytest scripts/xen-sbom-poc/tests/ -q
 ```
 
-**Expected result:** all 9 tests pass (as recorded in `worklog/journal.md`).
+**Expected result:** **21 passed**, with no skips and no failures.
 
-## 9. Verification: manually inspecting the generated SPDX documents
+- **A single failure means reproduction failed.**
+- If you see skipped tests, you are probably on the `experiment/tree-sitter-bash`
+  branch, which carries the unadopted tree-sitter experiment and skips its tests
+  deliberately (see section 4.5 of `docs/en/07-arm64-parser-gap-analysis.md`).
+
+## 10. Verification: manually inspecting the generated SPDX documents
 
 The same idea `run-linux-sbom.sh` applies automatically on the Linux side can
 be applied manually to the Xen-side output as well.
@@ -270,18 +377,13 @@ PY
   section of this document (especially anything related to `no matching
   parser` or `IfBlock`)
 
-## 10. Known limitations (to state explicitly in any external report)
+## 11. Known limitations (to state explicitly in any external report)
 
 Even when the reproduction procedure itself succeeds, be aware that the
 following are **not yet done / not yet established**, and avoid overstating
 them when reporting externally (see `worklog/backlog.md`; status as of the
 time this document was written).
 
-- **Validation against an external SPDX validator has not been done**
-  (backlog B-1). The current "validity check" is JSON-LD structural checking
-  only (presence of `@graph`, element counts); formal schema validation with
-  an official SPDX tool (e.g. `pyspdxtools`) has not been performed. This
-  requires expanding the custom JSON-LD `@context` as a precondition.
 - **`tools/`, `libs/`, `stubdom/` are not covered** (backlog B-3). This
   runbook covers only the hypervisor core (`xen/`).
 - **Linking to the Safety Case (backlog B-2) is on hold.** SPDX 3.1's Safety
@@ -289,12 +391,17 @@ time this document was written).
   in writing that the Xen FuSa SIG needs SBOM/SPDX usage.
   `analysis/xen-safety-case-relationships.example.spdx.json` is illustrative
   only and is not automatically linked to the generated SBOM.
-- **Verification on arm/arm64 has not been done** (backlog B-6). All
-  procedures and figures in this document are for x86_64.
+- **arm64 is verified** (backlog B-6; Step 6 = section 8), but **arm32 is not**.
+  arm64 needed exactly one extra parser, for XSM/FLASK, and that turned out to be a
+  configuration difference rather than an architecture one
+  (`docs/en/07-arm64-parser-gap-analysis.md`).
+- **Coverage on other defconfigs is unverified** (backlog B-11). The arm64 work showed
+  that gaps track *which features are enabled*, so other configurations — `x86_64`
+  with XSM/FLASK enabled, for instance — may still leave unknown commands.
 - CI integration (backlog B-4) and upstream contribution (backlog B-5) have
   also not been started.
 
-## 11. Key points for external explanation (reference)
+## 12. Key points for external explanation (reference)
 
 The core narrative to connect when explaining this to the Xen community or
 similar external audiences (see the "summary" at the end of
