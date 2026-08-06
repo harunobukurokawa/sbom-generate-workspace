@@ -52,6 +52,12 @@
 | Xen ハイパーバイザービルド          | **23秒**    | x86_64_defconfig                  |
 | Xen PoC（無改変ツール）             | 数秒〜数十秒      | ビルド済み前提                    |
 | Xen 完全版 SBOM 生成                | 数秒〜数十秒      | ビルド済み前提                    |
+| **arm64** ハイパーバイザービルド    | **8.0秒**   | `arm64_defconfig`、`make clean` 後の真のクリーンビルド、`-j12` |
+| **arm64** SBOM 生成                 | **0.8秒**   | ビルド済み前提、303 個の `.cmd` を解析 |
+
+arm64 の2行は12コア環境での実測（`make clean` が `prelink.o`・`.cmd`・`built_in.o`
+をすべて削除することを確認した上で計測）。ハイパーバイザー本体は規模が小さいため、
+ビルドも SBOM 生成も Linux カーネルとは桁違いに速い。
 
 ## 2. 全体の流れ
 
@@ -72,8 +78,14 @@ scripts/xen-sbom-poc/run-xen-poc.sh      ──► Xen PoC（無改変ツール�
 scripts/xen-sbom-poc/generate-xen-sbom.sh ──► Xen 完全版 SBOM（未知コマンド0件）
         │
         ▼
+（手順6）arm64 でクロスビルド + SBOM 生成 ──► arm64 SBOM（未知コマンド0件）
+        │
+        ▼
 （検証）JSON-LD の構造確認 + 単体テスト実行
 ```
+
+手順1〜5 は x86_64、手順6 は arm64。手順6 は手順1（ソース取得）だけを前提とし、
+手順2〜5 とは独立に実行できる。
 
 ## 3. 手順1: ソース取得
 
@@ -364,7 +376,12 @@ PY
   まだ Release Candidate 段階であり、Xen FuSa SIG 側でも SBOM/SPDX 活用の必要性が
   文書上は未確認のため。`analysis/xen-safety-case-relationships.example.spdx.json`
   はあくまで例示であり、生成 SBOM と自動的に紐付いてはいない。
-- **arm/arm64 での検証は未実施**（backlog B-6）。本書の手順・数値はすべて x86_64。
+- **arm64 は検証済み**（backlog B-6、2026-08-06 完了。手順6 = 8節）。ただし **arm32
+  は未検証**。arm64 で追加が必要だったのは XSM/FLASK パーサー1個のみで、これは
+  arch 差ではなくコンフィグ差だった（`docs/ja/06-arm64-parser-gap-analysis.md`）。
+- **他の defconfig での網羅性は未確認**（backlog B-10）。arm64 の知見から、欠落は
+  「有効化された機能」に依存すると分かったため、`x86_64` + XSM/FLASK 有効など
+  他のコンフィグでは未知コマンドが残る可能性がある。
 - CI 組み込み（backlog B-4）や上流貢献（backlog B-5）も未着手。
 
 ## 12. 社外説明のための要点（参考）
