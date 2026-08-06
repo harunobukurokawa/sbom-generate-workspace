@@ -9,6 +9,9 @@
 # or with unittest:
 #   PYTHONPATH=... python3 -m unittest discover -s scripts/xen-sbom-poc/tests
 
+import pathlib
+import shutil
+import tempfile
 import unittest
 
 import xen_parsers
@@ -186,6 +189,116 @@ class TestXenPatternsDoNotShadowUpstream(unittest.TestCase):
                 stealer,
                 f"{stealer.__name__ if stealer else ''} shadows upstream for: {probe[:70]}",
             )
+
+
+class _CapturedWarnings:
+    """Swap sbom_logging.warning for a recorder, restoring it afterwards."""
+
+    def __enter__(self):
+        self.calls = []
+        self._orig = xen_parsers.sbom_logging.warning
+        xen_parsers.sbom_logging.warning = lambda tmpl, /, **kw: self.calls.append(
+            (tmpl, kw)
+        )
+        return self
+
+    def __exit__(self, *exc):
+        xen_parsers.sbom_logging.warning = self._orig
+        return False
+
+
+class TestKeepExistingWarnsOnTotalDrop(unittest.TestCase):
+    """A wrong --obj-tree makes every parsed input resolve to a nonexistent path;
+    _keep_existing() used to return [] in silence, which made the misconfiguration
+    look like a parser defect. See docs/*/06 section 2.1."""
+
+    def setUp(self):
+        self._saved = xen_parsers.OBJ_TREE
+        self.tmp = tempfile.mkdtemp()
+        # One real file to allow "partial drop" cases.
+        pathlib.Path(self.tmp, "real.o").write_bytes(b"")
+
+    def tearDown(self):
+        xen_parsers.OBJ_TREE = self._saved
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_warns_when_every_input_is_dropped(self):
+        xen_parsers.OBJ_TREE = self.tmp
+        with _CapturedWarnings() as cap:
+            kept = xen_parsers._keep_existing(["ghost_a.o", "ghost_b.o"])
+        self.assertEqual(kept, [])
+        self.assertEqual(len(cap.calls), 1, "expected exactly one warning")
+        # The message must name the offending paths and the obj-tree to be actionable.
+        _, kwargs = cap.calls[0]
+        self.assertEqual(kwargs["count"], "2")
+        self.assertEqual(kwargs["obj_tree"], self.tmp)
+        self.assertIn("ghost_a.o", kwargs["paths"])
+
+    def test_silent_on_partial_drop(self):
+        # Xen's "generate X.new then mv to X" idiom legitimately drops some inputs.
+        xen_parsers.OBJ_TREE = self.tmp
+        with _CapturedWarnings() as cap:
+            kept = xen_parsers._keep_existing(["real.o", "transient.new"])
+        self.assertEqual(kept, ["real.o"])
+        self.assertEqual(cap.calls, [])
+
+    def test_silent_on_empty_input(self):
+        # Parsers that legitimately return no inputs (_parse_noop) must not warn.
+        xen_parsers.OBJ_TREE = self.tmp
+        with _CapturedWarnings() as cap:
+            self.assertEqual(xen_parsers._keep_existing([]), [])
+        self.assertEqual(cap.calls, [])
+
+    def test_no_filtering_and_no_warning_when_obj_tree_unset(self):
+        xen_parsers.OBJ_TREE = None
+        with _CapturedWarnings() as cap:
+            kept = xen_parsers._keep_existing(["ghost.o"])
+        self.assertEqual(kept, ["ghost.o"])
+        self.assertEqual(cap.calls, [])
+
+
+class TestObjTreeValidation(unittest.TestCase):
+    """Catch the "passed the repository root instead of <xen>/xen" mistake up front,
+    rather than after a full run produces a one-file SBOM."""
+
+    def setUp(self):
+        self._saved = xen_parsers.OBJ_TREE
+        self.tmp = tempfile.mkdtemp()
+
+    def tearDown(self):
+        xen_parsers.OBJ_TREE = self._saved
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_silent_for_a_configured_build_directory(self):
+        pathlib.Path(self.tmp, ".config").write_text("CONFIG_ARM64=y\n")
+        xen_parsers.OBJ_TREE = self.tmp
+        with _CapturedWarnings() as cap:
+            xen_parsers._validate_obj_tree()
+        self.assertEqual(cap.calls, [])
+
+    def test_detects_repository_root_and_suggests_the_hypervisor_dir(self):
+        # Layout: <root>/xen/.config exists, <root>/.config does not.
+        nested = pathlib.Path(self.tmp, "xen")
+        nested.mkdir()
+        (nested / ".config").write_text("CONFIG_ARM64=y\n")
+        xen_parsers.OBJ_TREE = self.tmp
+        with _CapturedWarnings() as cap:
+            xen_parsers._validate_obj_tree()
+        self.assertEqual(len(cap.calls), 1)
+        self.assertEqual(cap.calls[0][1]["suggestion"], str(nested))
+
+    def test_warns_when_no_config_anywhere(self):
+        xen_parsers.OBJ_TREE = self.tmp
+        with _CapturedWarnings() as cap:
+            xen_parsers._validate_obj_tree()
+        self.assertEqual(len(cap.calls), 1)
+        self.assertNotIn("suggestion", cap.calls[0][1])
+
+    def test_silent_when_obj_tree_unset(self):
+        xen_parsers.OBJ_TREE = None
+        with _CapturedWarnings() as cap:
+            xen_parsers._validate_obj_tree()
+        self.assertEqual(cap.calls, [])
 
 
 class TestInstallInjection(unittest.TestCase):
