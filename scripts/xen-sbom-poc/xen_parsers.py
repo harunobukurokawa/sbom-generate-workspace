@@ -131,6 +131,33 @@ def _parse_binfile(command: str) -> list[PathStr]:
 _COMBINE_FILE_OPTS = {"--script", "--bin1", "--bin2", "--map"}
 
 
+def _parse_flask_codegen(command: str) -> list[PathStr]:
+    """Parse Xen's XSM/FLASK policy code generators:
+
+        /bin/sh <script>.sh <awk> <output_dir> <policy_file>...
+
+    e.g. `/bin/sh ./xsm/flask/policy/mkflask.sh awk xsm/flask/include \\
+          ./xsm/flask/policy/security_classes ./xsm/flask/policy/initial_sids`
+
+    Inputs are the generator script and the policy definition files. The awk
+    interpreter name and the output *directory* are skipped -- note the latter
+    must be excluded explicitly, because OBJ_TREE's `os.path.exists` filter
+    accepts directories and would otherwise let it through as a "file".
+
+    These commands only appear when XSM/FLASK is enabled, which arm64_defconfig
+    does and x86_64 defconfig does not -- hence they were absent from the
+    original x86 PoC. See docs/ja/06-arm64-parser-gap-analysis.md.
+    """
+    positionals = [
+        p.value for p in tokenize_single_command(command) if isinstance(p, Positional)
+    ]
+    script = next((p for p in positionals if p.endswith(".sh")), None)
+    if script is None:
+        return []
+    # positionals == [sh, script, awk, out_dir, policy...]; skip awk and out_dir.
+    return [script] + positionals[positionals.index(script) + 3:]
+
+
 def _parse_combine_two_binaries(command: str) -> list[PathStr]:
     parts = tokenize_single_command(command)
     inputs = [
@@ -147,11 +174,19 @@ def _parse_combine_two_binaries(command: str) -> list[PathStr]:
 # Registry entries. Patterns are matched (re.match, anchored at start) before the
 # upstream entries, so keep the Xen-specific ones first. `.*` tolerates a leading
 # interpreter path.
+#
+# Keep these patterns NARROW. Entries here are matched before the whole upstream
+# registry, so a loose pattern silently steals commands that upstream already
+# parses correctly (a regression that produces no warning). Two such entries were
+# measured and removed -- see docs/ja/06-arm64-parser-gap-analysis.md.
 XEN_COMMAND_PARSERS = [
     (re.compile(r"^mv\b"), _parse_mv_command),
     (re.compile(r".*compat-[\w-]+\.py"), _parse_compat_tool),
     (re.compile(r".*combine_two_binaries\.py"), _parse_combine_two_binaries),
     (re.compile(r".*tools/binfile\b"), _parse_binfile),
+    # XSM/FLASK policy codegen. arm64_defconfig enables XSM/FLASK; x86_64
+    # defconfig does not, so these are the arm64-only gap found by this PoC.
+    (re.compile(r".*xsm/flask/policy/mk(flask|access_vector)\.sh\b"), _parse_flask_codegen),
     (re.compile(r"^cat\s+[^|>]*$"), _parse_cat_bare),
     # .banner generation (a version string). No source-file provenance; figlet is
     # an optional decorative renderer, so these branches carry no build inputs.
