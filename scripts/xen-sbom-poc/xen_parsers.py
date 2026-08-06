@@ -131,29 +131,31 @@ def _parse_binfile(command: str) -> list[PathStr]:
 _COMBINE_FILE_OPTS = {"--script", "--bin1", "--bin2", "--map"}
 
 
-def _parse_ld_command(command: str) -> list[PathStr]:
-    """Parse `ld` (GNU linker) commands to extract object/archive inputs.
+def _parse_flask_codegen(command: str) -> list[PathStr]:
+    """Parse Xen's XSM/FLASK policy code generators:
 
-    Extracts files ending in .o, .a from the linker command line.
-    Example: aarch64-linux-gnu-ld -r input1.o input2.o -o output.o
+        /bin/sh <script>.sh <awk> <output_dir> <policy_file>...
+
+    e.g. `/bin/sh ./xsm/flask/policy/mkflask.sh awk xsm/flask/include \\
+          ./xsm/flask/policy/security_classes ./xsm/flask/policy/initial_sids`
+
+    Inputs are the generator script and the policy definition files. The awk
+    interpreter name and the output *directory* are skipped -- note the latter
+    must be excluded explicitly, because OBJ_TREE's `os.path.exists` filter
+    accepts directories and would otherwise let it through as a "file".
+
+    These commands only appear when XSM/FLASK is enabled, which arm64_defconfig
+    does and x86_64 defconfig does not -- hence they were absent from the
+    original x86 PoC. See docs/ja/06-arm64-parser-gap-analysis.md.
     """
-    inputs = []
-    try:
-        parts = tokenize_single_command(command, flag_options=[
-            "-r", "-e", "-T", "-u", "-X", "-x", "-E", "-G", "-rpath",
-            "-Map", "-Bstatic", "-Bdynamic", "-soname", "-rpath-link"
-        ])
-        for p in parts:
-            if isinstance(p, Positional):
-                # File ends with .o, .a, .so, etc.
-                if any(p.value.endswith(ext) for ext in ('.o', '.a', '.so', '.ld')):
-                    inputs.append(p.value)
-    except Exception:
-        # Fallback: simple regex extraction
-        for token in shlex.split(command):
-            if any(token.endswith(ext) for ext in ('.o', '.a', '.so', '.ld')):
-                inputs.append(token)
-    return inputs
+    positionals = [
+        p.value for p in tokenize_single_command(command) if isinstance(p, Positional)
+    ]
+    script = next((p for p in positionals if p.endswith(".sh")), None)
+    if script is None:
+        return []
+    # positionals == [sh, script, awk, out_dir, policy...]; skip awk and out_dir.
+    return [script] + positionals[positionals.index(script) + 3:]
 
 
 def _parse_combine_two_binaries(command: str) -> list[PathStr]:
@@ -169,77 +171,28 @@ def _parse_combine_two_binaries(command: str) -> list[PathStr]:
     return script + inputs
 
 
-# tree-sitter-bash integration for complex shell commands (MUST be before XEN_COMMAND_PARSERS)
-try:
-    from tree_sitter_parser import TreeSitterCommandParser
-    _TREE_SITTER_AVAILABLE = True
-except ImportError:
-    _TREE_SITTER_AVAILABLE = False
-    TreeSitterCommandParser = None
-
-
-def _parse_complex_shell_command(command: str) -> list[PathStr]:
-    """Parse complex shell commands using tree-sitter-bash.
-
-    Handles if-then-else, while loops, pipes, and other shell constructs
-    that regex-based parsers cannot reliably parse.
-    """
-    if not _TREE_SITTER_AVAILABLE or TreeSitterCommandParser is None:
-        return []
-
-    try:
-        parser = TreeSitterCommandParser()
-        result = parser.parse(command)
-
-        # Extract inputs from parsed command and branches
-        inputs = set(result.inputs)
-
-        # Also extract from control flow branches (then/else/while bodies)
-        parsed_data = result.parsed_data
-        if parsed_data.get("has_conditionals"):
-            # Pattern to extract file arguments from common build commands
-            # e.g., -r file.o, -o output.o, < input.c, > output.txt
-            for branch_cmd in shlex.split(command):
-                # Skip common non-file tokens
-                if branch_cmd in ("if", "then", "else", "fi", "do", "done", "while"):
-                    continue
-                # Common file patterns
-                if any(branch_cmd.endswith(ext) for ext in ('.o', '.c', '.h', '.S', '.s', '.a', '.so')):
-                    inputs.add(branch_cmd)
-
-        return sorted(list(inputs))
-    except Exception:
-        # Fall back to basic regex extraction
-        files = []
-        for token in shlex.split(command):
-            if any(token.endswith(ext) for ext in ('.o', '.c', '.h', '.S', '.s', '.a', '.so', '.ld')):
-                files.append(token)
-        return files
-
-
 # Registry entries. Patterns are matched (re.match, anchored at start) before the
 # upstream entries, so keep the Xen-specific ones first. `.*` tolerates a leading
 # interpreter path.
+#
+# Keep these patterns NARROW. Entries here are matched before the whole upstream
+# registry, so a loose pattern silently steals commands that upstream already
+# parses correctly (a regression that produces no warning). Two such entries were
+# measured and removed -- see docs/ja/06-arm64-parser-gap-analysis.md.
 XEN_COMMAND_PARSERS = [
-    # tree-sitter-bash for complex shell constructs (if/while/pipes/logical ops)
-    # This must come BEFORE simple patterns to catch complex commands early
-    (re.compile(r".*(if\s+\[|then\s|else\s|fi\b|while\s|do\b|done\b|for\s|\|\s|\&\&|\|\|)"),
-     _parse_complex_shell_command) if _TREE_SITTER_AVAILABLE else None,
-    # GNU ld linker commands - extract .o, .a inputs
-    (re.compile(r".*aarch64-linux-gnu-ld\b|.*ld\b"), _parse_ld_command),
     (re.compile(r"^mv\b"), _parse_mv_command),
     (re.compile(r".*compat-[\w-]+\.py"), _parse_compat_tool),
     (re.compile(r".*combine_two_binaries\.py"), _parse_combine_two_binaries),
     (re.compile(r".*tools/binfile\b"), _parse_binfile),
+    # XSM/FLASK policy codegen. arm64_defconfig enables XSM/FLASK; x86_64
+    # defconfig does not, so these are the arm64-only gap found by this PoC.
+    (re.compile(r".*xsm/flask/policy/mk(flask|access_vector)\.sh\b"), _parse_flask_codegen),
     (re.compile(r"^cat\s+[^|>]*$"), _parse_cat_bare),
     # .banner generation (a version string). No source-file provenance; figlet is
     # an optional decorative renderer, so these branches carry no build inputs.
     (re.compile(r".*\|\s*figlet\b"), _parse_noop),
     (re.compile(r"^else\s+echo\b"), _parse_noop),
 ]
-
-# Filter out None entries (if tree-sitter not available)
-XEN_COMMAND_PARSERS = [entry for entry in XEN_COMMAND_PARSERS if entry is not None]
 
 
 # Xen's *.init.o recipe prepends a section-size validation loop

@@ -1,5 +1,48 @@
 # tree-sitter-bash Integration for Xen SBOM Generation
 
+> ## ⚠ CORRECTION (2026-08-06) — READ FIRST
+>
+> **This document's performance figures were expectations, not measurements, and a
+> subsequent ARM64 measurement refuted the hypothesis behind them. The registry
+> integration described here has been reverted.** See
+> [docs/en/06-arm64-parser-gap-analysis.md](docs/en/06-arm64-parser-gap-analysis.md)
+> for the measured results.
+>
+> What the ARM64 measurement (Xen 4.23-unstable, `arm64_defconfig`, 303 `savedcmd`
+> strings) actually found:
+>
+> | Claimed below | Measured |
+> |---------------|----------|
+> | Parse success 48% → 99.6% | The 48% baseline was never verified. The **existing** regex + `IfBlock` implementation already reaches **zero unknown commands**. |
+> | 1,847 files / 2,156 relationships / 3.2 MB | **894** files / **758** relationships / **1.5 MB** |
+> | ARM64 SBOM: ❌ FAIL (before) | ARM64 failure was caused by an `--obj-tree` argument error, **not** by shell-command parsing. |
+> | tree-sitter rescues if/while/pipe commands | **0 rescued, 7 upstream commands hijacked** → net regression. `xen_parse_inputs_from_commands()` already strips the `objdump \| while` prelude via `_VALIDATION_PRELUDE` and handles `if..then..fi` via `IfBlock`, so those commands never reach the registry. |
+>
+> The real ARM64 gap was **two XSM/FLASK policy codegen recipes** (`mkflask.sh`,
+> `mkaccess_vector.sh`), present because `arm64_defconfig` enables XSM/FLASK while
+> x86_64 `defconfig` does not. Adding one narrow parser via the existing
+> runtime-injection layer closed the gap with KernelSbom still unmodified.
+>
+> **Status of the code in this PR — INCOMPLETE.** `src/shell_parser.js`,
+> `scripts/shell_parser_wrapper.py`, and `scripts/xen-sbom-poc/tree_sitter_parser.py`
+> are retained but are **not** wired into `xen_parsers.py`, and they do not yet do what
+> this document claims:
+>
+> - ✓ AST construction and control-flow extraction work (`then_body` / `else_body`
+>   are recovered). A Node.js 12 compatibility fix (removing optional chaining) is
+>   applied.
+> - ✗ `extractIOFiles()` **always returns empty lists** — input/output extraction is
+>   unimplemented, so `ParseResult.inputs`/`outputs` are always `[]`.
+> - ✗ `shell_parser_wrapper.py` `json.loads()`-es only line 1 of the two
+>   pretty-printed JSON blocks the Node script emits, so it fails and silently falls
+>   back to regex.
+>
+> The 5 affected tests in `tests/test_tree_sitter_parser.py` are kept as the
+> specification a future implementation must satisfy, behind an `@unittest.skip` that
+> states this reason. Before adopting any of this, finish those three items *and*
+> reproduce the measurement method in §4.1 of the analysis document to show
+> rescues > steals.
+
 ## Overview
 
 This pull request introduces tree-sitter-bash integration to significantly improve shell command parsing in Xen SBOM generation. This resolves critical limitations in parsing complex shell constructs commonly found in Xen's build system.

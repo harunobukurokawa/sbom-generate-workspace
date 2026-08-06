@@ -115,6 +115,79 @@ class TestMvParser(unittest.TestCase):
         )
 
 
+class TestFlaskCodegenParser(unittest.TestCase):
+    # Exact commands from the arm64 build (.xsm/flask/include/*.cmd).
+    MKFLASK = (
+        "/bin/sh ./xsm/flask/policy/mkflask.sh awk xsm/flask/include "
+        "./xsm/flask/policy/security_classes ./xsm/flask/policy/initial_sids"
+    )
+    MKACCESS_VECTOR = (
+        "/bin/sh ./xsm/flask/policy/mkaccess_vector.sh awk xsm/flask/include "
+        "./xsm/flask/policy/access_vectors"
+    )
+
+    def test_mkflask_keeps_script_and_policy_files(self):
+        inputs = xen_parsers._parse_flask_codegen(self.MKFLASK)
+        self.assertEqual(
+            inputs,
+            [
+                "./xsm/flask/policy/mkflask.sh",
+                "./xsm/flask/policy/security_classes",
+                "./xsm/flask/policy/initial_sids",
+            ],
+        )
+
+    def test_mkaccess_vector_keeps_script_and_policy_file(self):
+        inputs = xen_parsers._parse_flask_codegen(self.MKACCESS_VECTOR)
+        self.assertEqual(
+            inputs,
+            [
+                "./xsm/flask/policy/mkaccess_vector.sh",
+                "./xsm/flask/policy/access_vectors",
+            ],
+        )
+
+    def test_awk_and_output_directory_are_dropped(self):
+        # The output dir must not leak: OBJ_TREE's os.path.exists filter accepts
+        # directories, so it would survive as a bogus "file" in the SBOM.
+        for cmd in (self.MKFLASK, self.MKACCESS_VECTOR):
+            inputs = xen_parsers._parse_flask_codegen(cmd)
+            self.assertNotIn("awk", inputs)
+            self.assertNotIn("xsm/flask/include", inputs)
+            self.assertNotIn("/bin/sh", inputs)
+
+
+class TestXenPatternsDoNotShadowUpstream(unittest.TestCase):
+    """The Xen entries are matched before the entire upstream registry, so a loose
+    pattern silently steals commands upstream already handles -- a regression that
+    emits no warning. These probes are real arm64 build commands that MUST fall
+    through to upstream."""
+
+    UPSTREAM_OWNED = (
+        # upstream: ^([^\s]+-)?ld\b
+        "aarch64-linux-gnu-ld    -EL  --fix-cortex-a53-843419 -r -o prelink.o "
+        "common/built_in.o drivers/built_in.o lib/built_in.o xsm/built_in.o "
+        "arch/arm/built_in.o --start-group arch/arm/arm64/lib/lib.a lib/lib.a --end-group",
+        # upstream: ^([^\s]+-)?(gcc|clang)\b -- note the "build" substring in the
+        # include path, which a `.*ld\b` pattern would wrongly match.
+        "aarch64-linux-gnu-gcc -c common/device-tree/dom0less-build.c "
+        "-o common/device-tree/dom0less-build.o",
+        # upstream: ^([^\s]+-)?objcopy\b
+        "aarch64-linux-gnu-objcopy -O binary -S xen-syms xen",
+    )
+
+    def test_no_xen_pattern_claims_an_upstream_command(self):
+        for probe in self.UPSTREAM_OWNED:
+            stealer = next(
+                (fn for pat, fn in xen_parsers.XEN_COMMAND_PARSERS if pat.match(probe)),
+                None,
+            )
+            self.assertIsNone(
+                stealer,
+                f"{stealer.__name__ if stealer else ''} shadows upstream for: {probe[:70]}",
+            )
+
+
 class TestInstallInjection(unittest.TestCase):
     def test_install_registers_parsers_and_hardcoded_deps(self):
         xen_parsers.install_xen_extensions()
@@ -126,6 +199,8 @@ class TestInstallInjection(unittest.TestCase):
             "/usr/bin/python3 ./tools/compat-build-header.py <x.i y.h >>z.new",
             "/usr/bin/python3 ./tools/compat-build-source.py ./x.lst <a.h >b.c.new",
             "/usr/bin/python3 ./tools/compat-xlat-header.py a.h b.lst > c.h.new",
+            TestFlaskCodegenParser.MKFLASK,
+            TestFlaskCodegenParser.MKACCESS_VECTOR,
         ):
             matched = next((p for pat, p in registry if pat.match(probe)), None)
             self.assertIsNotNone(matched, f"no parser matched: {probe}")
