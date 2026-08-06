@@ -14,7 +14,7 @@ commands**. No change to KernelSbom is required.
 | Metric | Before remediation | After |
 |--------|--------------------|-------|
 | Unknown build commands | (not measurable) | **0** |
-| `sbom.used-files.txt` | 1 entry | **894 entries** |
+| `sbom.used-files.txt` | 1 entry | **895 paths** (`wc -l` prints 894: no trailing newline) |
 | `sbom-build.spdx.json` | 7 elements / 2.2 KB | **1,951 elements / 1.5 MB** |
 | Changes to KernelSbom | none | **none (preserved)** |
 
@@ -28,8 +28,13 @@ Element breakdown after remediation (1,951 elements):
 | `simplelicensing_LicenseExpression` | 5 |
 | Document / Agent / CreationInfo / Sbom | 4 |
 
-Tracked file types (within the 894 entries, overlapping counts): `.h` 359, `.c` 222,
+Tracked file types (within the 895 paths, overlapping counts): `.h` 359, `.c` 222,
 `.o` 281, `.S` 19, `.a` 2.
+
+894 of the 895 paths become `software_File` elements. The one difference is the root
+artifact `prelink.o`, which lives in `sbom-output.spdx.json` instead. The list also
+contains `../../../usr/bin/dash` (the real path behind `/bin/sh`) — the shell that ran
+the codegen scripts, tracked as a dependency. That is expected, not an anomaly.
 
 ---
 

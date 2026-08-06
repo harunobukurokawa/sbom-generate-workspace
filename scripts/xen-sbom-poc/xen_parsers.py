@@ -216,7 +216,63 @@ OBJ_TREE: str | None = None
 def _keep_existing(paths: list[PathStr]) -> list[PathStr]:
     if OBJ_TREE is None:
         return paths
-    return [p for p in paths if os.path.exists(os.path.join(OBJ_TREE, p))]
+    kept = [p for p in paths if os.path.exists(os.path.join(OBJ_TREE, p))]
+
+    # Warn when a non-empty input set is emptied entirely. Dropping *some* inputs is
+    # normal (Xen's "generate X.new then mv to X" idiom), but dropping *all* of them
+    # usually means the paths are being resolved against the wrong root -- which is
+    # exactly how an --obj-tree off by one directory level manifests. Silently
+    # returning [] here once cost significant debugging time; see
+    # docs/ja/06-arm64-parser-gap-analysis.md section 2.1.
+    #
+    # Measured on a healthy arm64 build: 292 calls, 1 all-dropped (a genuine
+    # `.banner.tmp` transient). With a wrong --obj-tree: ~290 all-dropped. The
+    # logger collapses repeats of one template, so the healthy case is a single
+    # line while the broken case reports "Found N more instances" -- the count
+    # itself is the diagnostic.
+    if paths and not kept:
+        sbom_logging.warning(
+            "All {count} parsed input(s) were dropped because none exist under "
+            "obj-tree {obj_tree}: {paths}. If this repeats for most commands, "
+            "--obj-tree is probably wrong (for Xen it must be the hypervisor "
+            "build directory, e.g. <xen>/xen, not the repository root).",
+            count=str(len(paths)),
+            obj_tree=str(OBJ_TREE),
+            paths=", ".join(paths),
+        )
+    return kept
+
+
+def _validate_obj_tree() -> None:
+    """Sanity-check OBJ_TREE before the graph is built.
+
+    Catches the "--obj-tree points at the Xen repository root instead of the
+    hypervisor build directory" mistake up front, instead of letting it surface as
+    an SBOM that mysteriously contains a single file.
+    """
+    if OBJ_TREE is None:
+        return
+    if os.path.exists(os.path.join(OBJ_TREE, ".config")):
+        return  # looks like a configured build directory
+
+    # A .config one level down means the caller passed the repository root.
+    nested = os.path.join(OBJ_TREE, "xen", ".config")
+    if os.path.exists(nested):
+        sbom_logging.warning(
+            "obj-tree {obj_tree} has no .config, but {nested} does. Paths in .cmd "
+            "files are relative to the hypervisor build directory, so this is "
+            "almost certainly the wrong level -- pass {suggestion} instead.",
+            obj_tree=str(OBJ_TREE),
+            nested=nested,
+            suggestion=os.path.join(OBJ_TREE, "xen"),
+        )
+    else:
+        sbom_logging.warning(
+            "obj-tree {obj_tree} contains no .config; it does not look like a "
+            "configured Xen hypervisor build directory. Parsed inputs may fail to "
+            "resolve.",
+            obj_tree=str(OBJ_TREE),
+        )
 
 
 # --------------------------------------------------------------------------- #
@@ -289,6 +345,7 @@ def install_xen_extensions() -> None:
     """Inject the Xen parsers, the IfBlock-aware parser, and hardcoded deps into
     the already-imported upstream sbom package. Must run before the cmd graph is
     built (and before cmd_file is imported, so it picks up the patched function)."""
+    _validate_obj_tree()
     base_entries = list(CommandParserRegistry.create())
     savedcmd_parser.DEFAULT_COMMAND_PARSER_REGISTRY = CommandParserRegistry(
         XEN_COMMAND_PARSERS + base_entries

@@ -13,7 +13,7 @@
 | 項目 | 是正前 | 是正後 |
 |------|--------|--------|
 | 未知コマンド | （計測不能） | **0 件** |
-| `sbom.used-files.txt` | 1 件 | **894 件** |
+| `sbom.used-files.txt` | 1 件 | **895 パス**（`wc -l` は末尾改行が無いため 894 と出力） |
 | `sbom-build.spdx.json` | 7 elements / 2.2 KB | **1,951 elements / 1.5 MB** |
 | KernelSbom への変更 | なし | **なし（維持）** |
 
@@ -27,8 +27,13 @@
 | `simplelicensing_LicenseExpression` | 5 |
 | その他（Document / Agent / CreationInfo / Sbom） | 4 |
 
-追跡されたファイル種別（894 件の内訳、重複あり）: `.h` 359 / `.c` 222 / `.o` 281 /
+追跡されたファイル種別（895 パスの内訳、重複あり）: `.h` 359 / `.c` 222 / `.o` 281 /
 `.S` 19 / `.a` 2。
+
+895 パスのうち `software_File` 要素になるのは 894 個。差の 1 個はルート成果物
+`prelink.o` で、これは `sbom-output.spdx.json` 側に置かれる。また
+`../../../usr/bin/dash`（`/bin/sh` の実体）が含まれる — コード生成を実行した
+シェル自身が依存として追跡されたもので、異常ではない。
 
 ---
 
