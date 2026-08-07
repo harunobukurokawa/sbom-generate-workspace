@@ -1,0 +1,6 @@
+# Everything under analysis/ is captured evidence: generated SBOMs, run logs and
+# build traces. They are checked against recorded counts and checksums, so their
+# bytes must survive a round trip through a Windows checkout unchanged. Without
+# this, core.autocrlf rewrites their line endings and the artifacts no longer
+# match what the tool produced.
+analysis/** -text

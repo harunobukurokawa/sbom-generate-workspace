@@ -655,3 +655,81 @@ linear 化した。push 直前に `git ls-remote` でリモートの実状態を
 このブランチもまた `45832c9` から分岐した第三の系統で、arm64 の作業を含む
 （`e344857`「Reach zero unknown commands for arm64 SBOM; drop tree-sitter after
 measuring it」等）。つまり arm64 対応は最終的に 3 系統で重複実装されていたことになる。
+
+## 2026-08-06 専用ビルドホストの構築と、全検証項目の実行
+
+これまで「実行環境が無いので未確認」としてきた項目を潰すため、専用のビルド
+コンテナ（Docker, Ubuntu 22.04.5, 12 コア, `/workspace` 永続マウント）を構築し、
+そこで一通り実行した。追加パッケージは同ホストの `Dockerfile` に反映済み。
+
+### 環境構築で分かったこと
+
+1. **`gcc-multilib` は入れられない。** `gcc-11-aarch64-linux-gnu` と
+   `Conflicts:` の関係にあり、apt が両立を拒否する。arm64 クロスコンパイラの方が
+   必須なので `gcc-multilib` を落とし、32bit ヘッダは `libc6-dev-i386` 単体で賄った。
+   これは再ビルド時に必ず踏むので `Dockerfile` に警告コメントを入れた。
+2. **`tools` のビルドは xenbits からビルド時に seabios を clone する。**
+   1 回目はこれが 134 秒でタイムアウトして失敗した（xenbits 側の一時障害。
+   直後の再試行では 0.48 秒で応答）。事前に clone しておけば `make -C tools clean`
+   でも消えないので、以後ネットワークに依存しない。有効な firmware は seabios のみで、
+   OVMF / ROMBIOS / iPXE / qemu-xen / golang は `config/Tools.mk` で `n`。
+3. **Xen の clone は shallow のままでは検証に使えない。** 既存の成果物は
+   `c4bf5bc`（2026-07-06）で生成されており、パーサーの回帰を見るには同じコミットが要る。
+   HEAD（`e888192`）と比べるとソース差が混ざる。`git fetch --unshallow`（108 MB）で
+   全履歴を取得した。
+
+### 検証結果
+
+| 項目 | 結果 |
+|---|---|
+| ユニットテスト | **21 passed** |
+| x86_64 ハイパーバイザービルド（`c4bf5bc`, -j12） | 21.6 秒（記録の 23 秒と整合） |
+| x86_64 SBOM 生成 | exit 0 / 未知コマンド **0 件** |
+| arm64 クロスビルド | 5.8 秒、`CONFIG_XSM_FLASK=y` を実機 `.config` で確認 |
+| arm64 SBOM 生成 | exit 0 / 未知コマンド **0 件** |
+| tools/libs ビルド + トレース採取（B-3） | exit 0、37,100 行 / cwd 97 個 |
+| SPDX 外部検証 | **Conforms: True** |
+
+### x86_64 の回帰確認（arm64 対応でデグレしていないか）
+
+同一ソース（`c4bf5bc`）に現行パーサーを当てて生成し、コミット済み成果物と比較した。
+
+- used-files **1,519 = 1,519**
+- 総 elements **3,554 = 3,554**、かつ **要素タイプ別も全て一致**
+  （Relationship 1,445 / build_Build 583 / software_File 1,518 /
+  LicenseExpression 4 / CreationInfo 1 / SoftwareAgent 1 / SpdxDocument 1 / Sbom 1）
+- ファイル集合の差は 1 行のみで、`/usr/bin/dash` に至る相対パスの `../` の数。
+  ビルド場所の深さが違うだけで同一ファイル。
+- WARNING が 4 → 5 に増えたのは `1ef7eae` で入れた `.banner.tmp` の診断が
+  1 回だけ発火したもの。journal に記録した「292 回中 1 回」の実測と一致する。
+
+**arm64 対応による x86_64 のデグレは無い**と結論した。
+
+### 生成 SBOM はマシンをまたぐと bit 一致しない（想定内だが記録しておく）
+
+上記の比較で `sbom-build.spdx.json` の生 diff は 2,368 行あった。内訳は
+`hashValue` + `software_contentIdentifierValue` が 2,092 行（= **523 ファイル**の
+ハッシュ差）、`comment` 268 行、文書 UUID 6 行、`created` 2 行。
+差が出るのは `.o` / `.i` / `.lst` などの**生成物だけ**で、`.c` / `.h` のハッシュは
+全て一致する。デバッグ情報に焼き込まれるビルドパスが違うので当然の結果であり、
+KernelSbom の「決定的」は同一環境での再現性を指す。
+
+このため **`analysis/xen-full/` は上書きしない方針にした。** 差し替えても
+意味内容は同じで、記録されるのは私のビルドマシンのハッシュ・パス・時刻だけであり、
+118k 行のファイルを 2,368 行分汚すのに見合う情報が無い。回帰が無いという事実は
+本エントリと、新規に追加した `analysis/arm64/` 側で担保する。
+
+### 追加したもの
+
+- `analysis/arm64/` — arm64 の SBOM 一式（これまで未コミットだった）
+- `analysis/xen-tools-poc/xen-tools-build.{trace,stdout}.log` — B-3 用トレース
+- `analysis/validate-spdx-20260806.log` — SPDX 外部検証の出力
+- `.gitattributes` — `analysis/**` を `-text` に。Windows チェックアウトで
+  autocrlf が生成物の改行を書き換えると、記録済みの件数やハッシュと合わなくなるため。
+
+### 残った未解明点
+
+arm64 の総パス数が 898（B-6 の記録は 895）、elements 1,961（記録は 1,951）と
+わずかにずれる。`.h` 359 / `.c` 222 は記録と完全一致するのでソースの差ではない。
+**B-6 のエントリが検証時の Xen コミットを記録していない**ため同一条件を再現できず、
+原因を特定できていない。以後、成果物には必ず対象コミットを併記する。
