@@ -72,11 +72,22 @@ B-2 の必要性を調べた結果、当初の「P1・FuSa 直結」は**推論�
   作業ディレクトリ付きのコマンドトレースを取る（`-j1`）。当初案の strace は
   `execve` のみでは cwd を約18%しか復元できず不採用、bear もシステムパッケージ
   依存のため見送り（経緯はスクリプト冒頭コメントと `worklog/journal.md`）。
-- ブロック中: サンドボックスが `config/` への書き込みを拒否するため `./configure`
-  を私の側から実行できない。**ユーザーが手元のシェルで上記スクリプトを実行し、
-  `analysis/xen-tools-poc/xen-tools-build.trace.log` とビルド済み
-  `external/xen/tools/` を用意する**のが次のアクション。
-- 未着手部分: そのトレースを解析してコレクタ本体を実装する。
+- ~~ブロック中: サンドボックスが `config/` への書き込みを拒否するため `./configure`
+  を実行できない~~ → **2026-08-06 解消**。専用ビルドホスト（Docker, Ubuntu 22.04,
+  12 コア、`/workspace` 永続）を構築し、そこで `make tools` を完走させた（exit 0）。
+  採取済みトレースを `analysis/xen-tools-poc/` にコミット済み:
+  - `xen-tools-build.trace.log` 37,100 行 / 7.2 MB。うち 36,218 行に PS4 の
+    cwd タグが付き、**97 個の作業ディレクトリ**を復元できた（strace 方式の
+    約 18% に対する改善が実測で裏付けられた形）。
+  - `xen-tools-build.stdout.log` 1.4 MB。
+  - Xen は `c4bf5bc`、`./configure --with-system-qemu` 構成。有効な firmware は
+    seabios のみ（OVMF/ROMBIOS/iPXE/qemu-xen/golang は `config/Tools.mk` で `n`）。
+- **残作業（本体）**: このトレースを解析してコレクタを実装する。実装時の注意:
+  - トレースには configure 由来の機能テストが多数混入している
+    （例 `gcc -Werror -c -o /dev/null -x c /dev/null`）。素の `gcc ... -c` は
+    5,493 件あるが、これは翻訳単位数ではない。除外規則が要る。
+  - `tools/firmware/xen-dir/xen-root/` 配下には PV shim 用のミニ Xen ツリーがあり、
+    こちらは `.cmd` を生成している。tools 配下でも一部は cmd グラフ方式が使える。
 - 完了条件: hypervisor 以外の主要コンポーネントの SBOM が生成できる。
 
 ### B-4 ⬜ P2 — xen/ への `make sbom` 相当ターゲット統合（CI 再現）
@@ -98,6 +109,13 @@ B-2 の必要性を調べた結果、当初の「P1・FuSa 直結」は**推論�
 - 副産物: tree-sitter-bash を実測評価し**不採用**（ADR-0010）。救済 0 件・上流から奪取
   7 件で純粋な退行だった。実験コードは `experiment/tree-sitter-bash` ブランチに分離。
 - **arm32 は未検証**（B-9 として起票）。
+- 2026-08-06 追試: 別ホスト（構築したビルドコンテナ）で再実行し、**未知コマンド 0 件 /
+  exit 0** を再現。`CONFIG_XSM_FLASK=y` も実機の `.config` で確認した。
+  ただし総パス数は 898（記録は 895）、elements は 1,961（記録は 1,951）とわずかにずれる。
+  `.h` 359 / `.c` 222 は記録と完全一致するのでソース側の差ではない。
+  **原因を特定できていない**。本エントリが検証時の Xen コミットを記録していないため
+  同一条件を再現できないのが直接の理由で、以後は成果物ごとに commit を残すこと。
+  追試時の成果物は `analysis/arm64/`（Xen `c4bf5bc`）。
 
 ### B-8 ⬜ P2 — SBOM ↔ ソースコード トレーサビリティ照会の仕組み
 - 生成済み SPDX JSON-LD は既に「成果物 → 入力ソース」の関係を持つ。

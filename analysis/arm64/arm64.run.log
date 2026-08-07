@@ -1,0 +1,12 @@
+[WARNING] All 1 parsed input(s) were dropped because none exist under obj-tree /workspace/xen-arm64/xen: .banner.tmp. If this repeats for most commands, --obj-tree is probably wrong (for Xen it must be the hypervisor build directory, e.g. <xen>/xen, not the repository root).
+[INFO] Extracting all files from the cmd graph to sbom.used-files.txt instead of only source files because source files cannot be reliably classified when the source and object trees are identical.
+[INFO] Skipped creating a dedicated source SBOM because source files cannot be reliably classified when the source and object trees are identical. Added source files to the build SBOM instead.
+[WARNING] Could not infer primary purpose for /workspace/xen-arm64/xen/tools/binfile
+[WARNING] Could not infer primary purpose for /workspace/xen-arm64/xen/include/hypercall-defs.i
+[WARNING] Could not infer primary purpose for /workspace/xen-arm64/xen/.banner
+[WARNING] Summarize warnings:
+All 1 parsed input(s) were dropped because none exist under obj-tree /workspace/xen-arm64/xen: .banner.tmp. If this repeats for most commands, --obj-tree is probably wrong (for Xen it must be the hypervisor build directory, e.g. <xen>/xen, not the repository root).
+Could not infer primary purpose for /workspace/xen-arm64/xen/tools/binfile
+Could not infer primary purpose for /workspace/xen-arm64/xen/include/hypercall-defs.i
+Could not infer primary purpose for /workspace/xen-arm64/xen/.banner
+... (Found 7 more instances of this warning)

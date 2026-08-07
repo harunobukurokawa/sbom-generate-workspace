@@ -1,0 +1,10 @@
+== Structural validation (JSON Schema, per-file) ==
+-- analysis/xen-full/sbom-build.spdx.json (@context flattened to plain string; see caveat 1 above) --
+ok -- validation done
+-- analysis/xen-full/sbom-output.spdx.json (@context flattened to plain string; see caveat 1 above) --
+ok -- validation done
+
+== Semantic validation (SHACL) ==
+-- merged graph of: analysis/xen-full/sbom-build.spdx.json analysis/xen-full/sbom-output.spdx.json --
+Validation Report
+Conforms: True
