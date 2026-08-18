@@ -733,3 +733,27 @@ arm64 の総パス数が 898（B-6 の記録は 895）、elements 1,961（記録
 わずかにずれる。`.h` 359 / `.c` 222 は記録と完全一致するのでソースの差ではない。
 **B-6 のエントリが検証時の Xen コミットを記録していない**ため同一条件を再現できず、
 原因を特定できていない。以後、成果物には必ず対象コミットを併記する。
+
+## 2026-08-18 B-8 実装完了、Xen FuSa SIG への共有準備
+
+伊藤さんによる arm64 対応一式（B-6、PR #1・`feature/arm64-sbom-support`）が
+`main` に統合済みであることを確認（ローカル `main` を fast-forward で追随）。
+これを受け、ユーザーから (1) これまでの対応内容のまとめ、(2) Xen FuSa SIG
+コミュニティへの共有、を依頼された。
+
+1. 未コミットで存在した `scripts/xen-sbom-poc/query_traceability.py`・
+   `tests/test_query_traceability.py`（B-8、ADR-0008/ADR-0009 の実装）を
+   レビュー。ADR-0009 の実装仕様 1〜4（relationshipType ホワイトリスト、
+   `to`/`from` 両索引、パス完全一致＋曖昧性検出、カバレッジ外の明示的区別）を
+   すべて満たしていることをコードとテスト（11件、すべて pass）で確認。
+2. `analysis/arm64/`（B-6 の実 SBOM）に対して実クエリを実行し、
+   `common/bitmap.c` の downstream 照会が `prelink.o`・パッケージまで正しく
+   到達すること、`tools/xl/xl.c`（B-3 未達）が `UNKNOWN / OUT-OF-COVERAGE`
+   を非ゼロ終了コードで返すことを確認。
+3. レビュー中に軽微な表示バグを発見・修正: `coverage_summary()` が
+   obj-tree 外の絶対パス（実データ中の `/usr/bin/dash` 1件）により
+   空文字列のトップレベルディレクトリを出力に混入させていた
+   （`{""}` を差分除外して修正、動作への実害はなし）。
+4. `worklog/backlog.md` の B-8 を ✅ 完了に更新。
+5. まとめの共有先について、Xen wiki の FuSa SIG ページ向け Markdown を
+   作成する方針でユーザーと合意。

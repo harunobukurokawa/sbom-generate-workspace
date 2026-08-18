@@ -117,7 +117,7 @@ B-2 の必要性を調べた結果、当初の「P1・FuSa 直結」は**推論�
   同一条件を再現できないのが直接の理由で、以後は成果物ごとに commit を残すこと。
   追試時の成果物は `analysis/arm64/`（Xen `c4bf5bc`）。
 
-### B-8 ⬜ P2 — SBOM ↔ ソースコード トレーサビリティ照会の仕組み
+### B-8 ✅ P2 — SBOM ↔ ソースコード トレーサビリティ照会の仕組み
 - 生成済み SPDX JSON-LD は既に「成果物 → 入力ソース」の関係を持つ。
   **訂正（2026-08-01、ADR-0008）**: 具体的な `relationshipType` は
   `contains`/`generatedFrom` ではなく **`hasInput`/`hasOutput`**（`build_Build`
@@ -170,6 +170,19 @@ B-2 の必要性を調べた結果、当初の「P1・FuSa 直結」は**推論�
   `dependsOn` を辿って依存する/依存される SBOM 要素（`build_Build`・ファイル・
   パッケージ）の一覧が得られる。かつ上記実装仕様の 1（ホワイトリストと
   `dependsOn` 対応）・4（カバレッジ外の明示的区別）を満たすこと。
+- **2026-08-18 完了**: `scripts/xen-sbom-poc/query_traceability.py` を実装。
+  ADR-0009 の実装仕様 1〜4 をすべて満たす（relationshipType ホワイトリスト、
+  `to`/`from` 両方向索引、obj-tree 相対パス完全一致＋曖昧時は
+  `CoverageError`、`software_File` として存在しないパスは
+  `UNKNOWN / OUT-OF-COVERAGE` を非ゼロ終了コードで返し「影響なし」とは
+  区別）。downstream（このファイルを変更したら何が影響を受けるか）と
+  upstream（この成果物は何から作られたか）の両方向をサポート。
+  `tests/test_query_traceability.py`（11 件、ADR-0008/0009 の各知見を
+  手組み JSON-LD フィクスチャで再現）に加え、`analysis/arm64/` の実 SBOM
+  （B-6 成果物）に対しても動作確認済み: `common/bitmap.c` の downstream
+  照会が `prelink.o` とパッケージまで正しく到達し、`tools/xl/xl.c`
+  （B-3 未達のためカバレッジ外）は `UNKNOWN / OUT-OF-COVERAGE` を
+  非ゼロ終了コードで返すことを確認。
 
 ### B-7 ✅ P2 — 再現手順書（英語版）の作成
 - `docs/ja/05-reproduction-runbook.md`（2026-07-08 作成、日本語版のみ）の内容を
