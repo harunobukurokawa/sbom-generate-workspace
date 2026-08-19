@@ -1,9 +1,11 @@
-# Provenance for `xen-sbom-status-report.pptx` (2026-08-19)
+# Provenance for `xen-sbom-status-report.pptx` / `-en.pptx` (2026-08-19)
 
 This file records, for every number and log/code excerpt shown in the slide
-deck, exactly which repository file and commit it came from, and how it was
-verified. Kept alongside the deck so the figures remain traceable after the
-deck itself is shared outside the repo (e.g. posted to a wiki).
+deck (Japanese: `xen-sbom-status-report.pptx`; English: `xen-sbom-status-report-en.pptx`,
+same content and figures, translated), exactly which repository file and
+commit it came from, and how it was verified. Kept alongside the decks so the
+figures remain traceable after they are shared outside the repo (e.g. posted
+to a wiki).
 
 Verification method: each number below was re-derived directly from the
 committed artifact in this session (JSON element counts via `json.load` +
