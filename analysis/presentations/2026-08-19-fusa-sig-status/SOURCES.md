@@ -56,6 +56,37 @@ pass.
 |---|---|
 | 303 savedcmd measured, 0 rescued / 7 stolen for tree-sitter, 23 stolen for the `ld` parser, 48%→99.6% never measured | `docs/{en,ja}/07-arm64-parser-gap-analysis.md` §4.1-4.4; `worklog/decisions.md` ADR-0010 | — (doc-only, not re-derived from raw logs in this session) |
 
+## Slide 3 footnote: "premise behind ③ is shared with Linux, not Xen-specific" (added 2026-08-20)
+
+Added in response to review feedback (Ito). Claim: KernelSbom tracks build inclusion
+(file-level input→output relationships) only, never function-call graphs, and this is
+inherent to KernelSbom's own design rather than a Xen-specific simplification.
+Verified against `docs/ja/01-linux-sbom-tool.md` §1 (KernelSbom's three documents are
+described purely in terms of files, build commands, and input→output relationships;
+no notion of call-graph or symbol-reachability analysis appears anywhere in that
+description, for either Linux or Xen).
+
+## Slide 6 wording change: softened the "necessity" claim (added 2026-08-20)
+
+The original wording asserted that the Xen FuSa SIG's change-management process
+*needs* this traceability tool. That overstated an unconfirmed premise: `worklog/backlog.md`
+item B-0 (not started) and the 2026-07-05 investigation note in the same file explicitly
+record that whether Xen FuSa SIG needs SBOM/SPDX at all is *unconfirmed*. The slide was
+reworded to a generic "change-impact analysis" framing, with a hedged, explicitly
+unverified mention of a possible future VEX (vulnerability information) use case (per
+user direction) -- neither the FuSa-necessity claim nor the VEX angle should be read as
+established; both are flagged as unexplored in the slide text itself.
+
+## Backlog item added: "parser-layer maintenance policy" / B-12 (added 2026-08-20)
+
+Added in response to review feedback (Ito), and deliberately kept neutral in tone (badge
+"to discuss", not a severity color) per user direction not to overstate it. Grounded in
+what the project has actually built: `scripts/xen-sbom-poc/xen_parsers.py` currently has
+no automated way to detect that a new Xen build recipe needs a new parser -- the only
+verification method demonstrated in this deck (slide 5) is a manual `grep -c` over a run
+log. Recorded as `worklog/backlog.md` B-12 (open, no fixed priority -- explicitly framed
+as a question for the Xen community, e.g. at a Xen Summit).
+
 ## How to reproduce these checks yourself
 
 ```bash
