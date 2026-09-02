@@ -9,7 +9,9 @@
 # or with unittest:
 #   PYTHONPATH=... python3 -m unittest discover -s scripts/xen-sbom-poc/tests
 
+import json
 import pathlib
+import re
 import shutil
 import tempfile
 import unittest
@@ -332,6 +334,57 @@ class TestInstallInjection(unittest.TestCase):
             "include/xen/compile.h.in",
             hardcoded_dependencies.HARDCODED_DEPENDENCIES["include/xen/compile.h"],
         )
+
+
+class TestUnknownCommandsReport(unittest.TestCase):
+    def setUp(self):
+        xen_parsers.OBJ_TREE = None
+        self._saved = list(xen_parsers.UNKNOWN_COMMANDS)
+        xen_parsers.UNKNOWN_COMMANDS.clear()
+
+    def tearDown(self):
+        xen_parsers.UNKNOWN_COMMANDS[:] = self._saved
+
+    def test_no_matching_parser_is_recorded(self):
+        xen_parsers.xen_parse_inputs_from_commands("totally-unknown-tool --flag x", False)
+        self.assertEqual(len(xen_parsers.UNKNOWN_COMMANDS), 1)
+        entry = xen_parsers.UNKNOWN_COMMANDS[0]
+        self.assertEqual(entry["reason"], "no_matching_parser")
+        self.assertEqual(entry["command"], "totally-unknown-tool --flag x")
+
+    def test_parse_error_is_recorded_with_detail(self):
+        # A parser that always raises, so the failure mode is independent of any
+        # real command's tokenization quirks.
+        def _raising_parser(command):
+            raise IndexError("boom")
+
+        registry = xen_parsers.CommandParserRegistry([(re.compile(r"^boom\b"), _raising_parser)])
+        xen_parsers.xen_parse_inputs_from_commands("boom", False, registry)
+        self.assertEqual(len(xen_parsers.UNKNOWN_COMMANDS), 1)
+        entry = xen_parsers.UNKNOWN_COMMANDS[0]
+        self.assertEqual(entry["reason"], "parse_error")
+        self.assertEqual(entry["detail"], "boom")
+
+    def test_write_report_includes_config_and_commands(self):
+        xen_parsers.UNKNOWN_COMMANDS.append({"command": "foo", "reason": "no_matching_parser", "detail": ""})
+        tmp = tempfile.mkdtemp()
+        try:
+            xen_hv = pathlib.Path(tmp) / "hv"
+            xen_hv.mkdir()
+            (xen_hv / ".config").write_text("CONFIG_XSM_FLASK=y\nCONFIG_DEBUG=n\n# comment\n")
+            out_path = pathlib.Path(tmp) / "unknown-commands.json"
+
+            xen_parsers.write_unknown_commands_report(
+                str(out_path), xen_hv=str(xen_hv), root_artifact="prelink.o", arch="arm64"
+            )
+
+            report = json.loads(out_path.read_text())
+            self.assertEqual(report["root_artifact"], "prelink.o")
+            self.assertEqual(report["arch"], "arm64")
+            self.assertEqual(report["config_enabled"], ["CONFIG_XSM_FLASK=y"])
+            self.assertEqual(report["unknown_commands"][0]["command"], "foo")
+        finally:
+            shutil.rmtree(tmp)
 
 
 if __name__ == "__main__":

@@ -241,6 +241,22 @@ B-2 の必要性を調べた結果、当初の「P1・FuSa 直結」は**推論�
   との短い議論が望ましい**、という位置づけに留め、技術的な優先度は付けない。
 - 完了条件: 保守方針についてXenコミュニティとの合意形成の方向性を得る、または
   継続討議事項として明記する。
+- **2026-09-02 実装（他の SBOM 生成作業に先行して実施）**: 上記の保守方針（誰が
+  持つか）の合意形成とは別に、「Makefile 変更でパーサーが対応不能になったこと」
+  を検知・報告する仕組みを先行実装した。本プロジェクト側で持ち続ける前提であっても
+  一貫した運用ができることを示す位置づけで、コミュニティとの議論を妨げない。
+  - `xen_parsers.py`: 未知コマンド（マッチするパーサーなし／パーサーが例外送出）を
+    `UNKNOWN_COMMANDS` に収集し、`write_unknown_commands_report()` で
+    `<out_dir>/unknown-commands.json` に出力（`gen_xen_sbom.py` から `finally` 節で
+    呼び出し、fail-on-unknown で異常終了した場合も出力される）。記録する環境情報は
+    ADR-0011 の知見（欠落はコンフィグ依存でありarch/toolchain非依存）に基づき、
+    Xen commit と `.config` の有効(`=y`)項目のみに絞った（環境の全dumpはしない）。
+  - `diff_unknown_commands.py`（独立コマンド）: 2つの `unknown-commands.json` を
+    比較し、新規/解消した未知コマンドと、commit・config の差分を提示する。新規の
+    未知コマンドがあれば exit code 1（CI ゲートとして利用可能）。
+  - テスト: `tests/test_xen_parsers.py::TestUnknownCommandsReport`,
+    `tests/test_diff_unknown_commands.py`。
+  - 決定の経緯は `worklog/decisions.md` の該当 ADR を参照。
 
 ## 推奨順序（2026-08-06 改訂: B-6 完了）
 標準が安定し必要性が明確なものを優先: **B-3 → B-8 → B-11 → B-0 →（B-0=Yes なら）B-2 → B-4 → B-5 → B-9 → B-10**。

@@ -796,3 +796,37 @@ FuSa SIG 向け状況報告スライド（日英各版、`analysis/presentations
 3点とも日英スライド（`xen-sbom-status-report.pptx` / `-en.pptx`）に反映し、
 スライドは10枚構成（本編10枚+Appendix区切り+Appendix A）に更新。
 `worklog/backlog.md` に B-12 を追加。
+
+## 2026-09-02 B-12 の一部として「未知コマンド検知・報告」を先行実装
+
+Makefile 変更で `xen_parsers.py` が対応不能になったことを、ログを目視で
+grep するのではなく構造化された形で検知・報告できるようにしたいという
+ユーザー要望を受け、B-12（パーサー層の保守方針）のうち技術的な部分
+（検知・報告の仕組み）を、他の SBOM 生成作業（B-3 等）に先行して実装した。
+
+設計の要点（詳細は ADR-0012）:
+- `gen_xen_sbom.py` 実行のたびに `<out_dir>/unknown-commands.json` を出力
+  （fail-on-unknown で異常終了しても `finally` で必ず出力）。中身は未知
+  コマンドの一覧（コマンド文字列・理由・エラー詳細）、Xen commit、`.config`
+  の有効項目。
+- 差分提示は独立コマンド `diff_unknown_commands.py` に切り出し、2つの
+  レポートを比較して新規/解消コマンドと commit/config の差分を表示、新規が
+  あれば exit code 1。
+- 記録する環境情報は config の有効項目のみに絞った。ADR-0011（未知コマンドの
+  発生要因は arch ではなく config）の知見を踏まえた判断で、ユーザーからも
+  同意を得た。
+
+ユーザーからの追加方針（反映済み）:
+- 「独立コマンドによる差異提示」という案そのものはユーザー発案で、その通りに
+  実装した。
+- 「本プロジェクト側で持ち続ける間の一貫性が取れれば、今後のコミュニティとの
+  議論は継続可能」との判断も得た。つまり本実装は保守体制（誰が持つか）を
+  決定するものではなく、当面本プロジェクト側で持つ場合に一貫した運用を
+  可能にするための技術的な下地という位置づけ。
+
+実装: `scripts/xen-sbom-poc/xen_parsers.py`（`UNKNOWN_COMMANDS`,
+`write_unknown_commands_report`）, `scripts/xen-sbom-poc/gen_xen_sbom.py`
+（`finally` での呼び出し）, `scripts/xen-sbom-poc/diff_unknown_commands.py`
+（新規）。テスト: `tests/test_xen_parsers.py::TestUnknownCommandsReport`,
+`tests/test_diff_unknown_commands.py`（新規）。`worklog/backlog.md` の B-12
+に実装内容を追記。

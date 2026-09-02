@@ -61,7 +61,18 @@ def main() -> None:
 
     # cwd must be the obj-tree for root-artifact resolution, matching run-xen-poc.sh.
     os.chdir(xen_hv)
-    runpy.run_path(os.path.join(sbom_dir, "sbom.py"), run_name="__main__")
+    try:
+        runpy.run_path(os.path.join(sbom_dir, "sbom.py"), run_name="__main__")
+    finally:
+        # Written even on failure: with fail-on-unknown, an aborted run is
+        # exactly the case this report exists to explain. See
+        # diff_unknown_commands.py for how two of these get compared.
+        xen_parsers.write_unknown_commands_report(
+            os.path.join(out_dir, "unknown-commands.json"),
+            xen_hv=xen_hv,
+            root_artifact=root,
+            arch=os.environ.get("XEN_TARGET_ARCH"),
+        )
 
 
 if __name__ == "__main__":

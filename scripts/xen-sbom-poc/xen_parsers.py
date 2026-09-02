@@ -18,9 +18,12 @@
 # Requires the upstream `sbom` package to be importable (the driver inserts
 # external/linux/scripts/sbom onto sys.path before importing this module).
 
+import json
 import os
 import re
 import shlex
+import subprocess
+from datetime import datetime, timezone
 
 import sbom.cmd_graph.savedcmd_parser as savedcmd_pkg
 from sbom.cmd_graph.savedcmd_parser import savedcmd_parser
@@ -279,6 +282,14 @@ def _validate_obj_tree() -> None:
 # IfBlock-aware parse_inputs_from_commands (for include/xen/compile.h)
 # --------------------------------------------------------------------------- #
 
+# Every command this run's registry could not parse (no matching pattern, or a
+# pattern matched but the parser itself raised). Populated by
+# xen_parse_inputs_from_commands, consumed by write_unknown_commands_report.
+# A Makefile change that alters a savedcmd shape enough to break a parser shows
+# up here first -- see worklog/decisions.md ADR (parser-maintenance reporting).
+UNKNOWN_COMMANDS: list[dict[str, str]] = []
+
+
 def xen_parse_inputs_from_commands(
     commands: str,
     fail_on_unknown_build_command: bool,
@@ -288,7 +299,12 @@ def xen_parse_inputs_from_commands(
     that `if..then..fi` blocks have their then-branch inputs *parsed and kept*
     (Xen uses one to generate compile.h) instead of dropped with a warning."""
 
-    def log_error_or_warning(message: str, /, **kwargs: str) -> None:
+    def log_error_or_warning(message: str, /, reason: str, **kwargs: str) -> None:
+        UNKNOWN_COMMANDS.append({
+            "command": kwargs.get("single_command", ""),
+            "reason": reason,
+            "detail": kwargs.get("error_message", ""),
+        })
         if fail_on_unknown_build_command:
             sbom_logging.error(message, **kwargs)
         else:
@@ -316,6 +332,7 @@ def xen_parse_inputs_from_commands(
         if matched_parser is None:
             log_error_or_warning(
                 "Skipped parsing command {single_command} because no matching parser was found",
+                reason="no_matching_parser",
                 single_command=single_command,
             )
             continue
@@ -324,6 +341,7 @@ def xen_parse_inputs_from_commands(
         except (CmdParsingError, IndexError) as e:
             log_error_or_warning(
                 "Skipped parsing command {single_command} because of command parsing error: {error_message}",
+                reason="parse_error",
                 single_command=single_command,
                 error_message=str(e),
             )
@@ -359,3 +377,64 @@ def install_xen_extensions() -> None:
     import sbom.cmd_graph.cmd_file as cmd_file_mod
     cmd_file_mod.parse_inputs_from_commands = xen_parse_inputs_from_commands
     hardcoded_dependencies.HARDCODED_DEPENDENCIES.update(XEN_HARDCODED_DEPENDENCIES)
+
+
+# --------------------------------------------------------------------------- #
+# Unknown-command reporting (parser-maintenance early warning)
+# --------------------------------------------------------------------------- #
+
+def _git_commit(xen_hv: str) -> str | None:
+    """Best-effort Xen commit hash for the tree at xen_hv (a subdirectory of
+    the actual git checkout, so `git -C` must be pointed at xen_hv itself --
+    git walks up to find the enclosing repo)."""
+    try:
+        result = subprocess.run(
+            ["git", "-C", xen_hv, "rev-parse", "HEAD"],
+            capture_output=True, text=True, check=True,
+        )
+        return result.stdout.strip()
+    except (OSError, subprocess.CalledProcessError):
+        return None
+
+
+_ENABLED_CONFIG_RE = re.compile(r"^CONFIG_\w+=y$")
+
+
+def _enabled_config(xen_hv: str) -> list[str]:
+    """Enabled (=y) entries from the build's .config. Deliberately not a full
+    environment dump: ADR-0011 found that parser coverage gaps track enabled
+    config (e.g. CONFIG_XSM_FLASK), not arch or toolchain, so that is what a
+    diff needs to explain a new unknown command."""
+    try:
+        with open(os.path.join(xen_hv, ".config"), encoding="utf-8") as f:
+            return sorted(line.strip() for line in f if _ENABLED_CONFIG_RE.match(line.strip()))
+    except OSError:
+        return []
+
+
+def write_unknown_commands_report(
+    path: str,
+    *,
+    xen_hv: str,
+    root_artifact: str,
+    arch: str | None = None,
+) -> None:
+    """Write a small JSON report of this run's UNKNOWN_COMMANDS plus enough
+    context (Xen commit, enabled config) to tell a genuine parser regression
+    apart from an already-known config-driven gap. Call from a `finally`
+    block: with fail-on-unknown, the very case worth reporting is the one
+    where the upstream tool aborted partway through.
+
+    Consumed by diff_unknown_commands.py, which compares two of these reports.
+    """
+    report = {
+        "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "root_artifact": root_artifact,
+        "arch": arch,
+        "xen_commit": _git_commit(xen_hv),
+        "config_enabled": _enabled_config(xen_hv),
+        "unknown_commands": UNKNOWN_COMMANDS,
+    }
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(report, f, indent=2, sort_keys=True)
+        f.write("\n")
