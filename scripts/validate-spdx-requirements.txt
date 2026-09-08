@@ -1,2 +1,4 @@
+# The third validator (SPDX Java Tools' Verify) is not a pip package --
+# see scripts/fetch-spdx-tools-java.sh.
 check-jsonschema==0.37.4
 pyshacl==0.40.0

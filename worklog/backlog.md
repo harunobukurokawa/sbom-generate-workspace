@@ -55,6 +55,17 @@ B-2 の必要性を調べた結果、当初の「P1・FuSa 直結」は**推論�
   再現用スクリプト `scripts/validate-spdx.sh` と依存
   `scripts/validate-spdx-requirements.txt` を追加。詳細は
   `docs/{en,ja}/06-external-validation.md`。
+- **2026-09-08 追加**: SPDXコミュニティとの連携度を高める目的で、3つ目の
+  独立バリデータとして **SPDX Java Tools `Verify`**（`tools.spdx.org` の
+  Validateページの実体、`spdx/tools-java` v2.0.7）を追加。`scripts/
+  fetch-spdx-tools-java.sh`（新規、jarをダウンロード。pipパッケージではない）
+  で取得し、`validate-spdx.sh` に第3の検証パスとして統合。`analysis/xen-full/`
+  の実データで両文書とも `This SPDX Document is valid.` を確認。ただし
+  `Verify` は文書間参照チェックを行わない（`pyshacl --with` の代替にはならない）
+  ことと、大文字小文字違いのファイルパスを誤って重複IDとする既知の未修正issue
+  （`spdx/tools-java#283`）があることを確認・記録（本プロジェクトのXenツリーでは
+  該当ファイルなしで実害なしを確認済み）。詳細は`worklog/decisions.md`のADRと
+  `docs/{en,ja}/06-external-validation.md` §4。
 
 ### B-2 ⏸ P?（B-0 待ち）— Safety Case リンカの実装
 - **保留**: 必要性未確立（上記知見）。B-0 で Yes かつ SPDX 3.1 が実用段階になってから起票。

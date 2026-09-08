@@ -319,3 +319,44 @@
   寄せるか」という B-12 本来の保守体制の合意形成はこの実装で解決したわけではない。
   本実装は「本プロジェクト側で持ち続ける前提でも一貫した運用ができる」ことを
   示す技術的な下地であり、Xen コミュニティとの議論を先取り・代替するものではない。
+
+## ADR-0013: 3つ目の SPDX バリデータとして SPDX Java Tools `Verify` を追加（`spdx-online-tools` 本体は導入しない）
+- **日付**: 2026-09-08
+- **状態**: 採用
+- **背景**: ユーザーから `tools.spdx.org`（`spdx/spdx-online-tools`）を
+  併用できないか、SPDXコミュニティとの連携度を高める目的で相談があった。
+  調査の結果、`spdx-online-tools` はログイン・Valkey・Selenium テストまで
+  含む Django フルスタックのWebサイトであり、検証機能単体の目的には過剰と
+  判断した。
+- **決定**: `spdx-online-tools` の Validate 機能が実際に呼び出している
+  検証エンジン本体 **`spdx/tools-java`（"SPDX Java Tools"）の `Verify`
+  コマンド**を、Webサイトを介さず直接（jarとして）呼び出す形で
+  `validate-spdx.sh` に第3の検証パスとして統合する。バージョンは v2.0.7 に
+  固定（`scripts/fetch-spdx-tools-java.sh` で取得）。
+- **理由**:
+  - `Verify` は SPDX コミュニティの Java リファレンス実装であり、
+    `tools.spdx.org` で広く使われているのと同じ検証結果が得られる。
+    Pythonの `check-jsonschema`/`pyshacl` とは異なるエコシステムの実装であり、
+    実装依存の見落としを相互に補完できる。
+  - `SerFileType.JSONLD` として SPDX 3.0.1 JSON-LD を直接扱えることを実機で
+    確認済み（`java -jar ... Verify FILE JSONLD`）。
+  - Webサイト本体（ログイン、ライセンス全文検索、XML editor等）は本プロジェクトの
+    検証ニーズと無関係であり、運用コスト（Java + Valkey + DB等）に見合わない。
+- **確認した既知の制約（実機検証済み）**:
+  1. `Verify` は1ファイルずつしか受け付けず、結合(`--with`)オプションがない。
+     また `sbom-build.spdx.json` を単独で渡しても `valid` と報告される
+     （`pyshacl` は同伴文書への参照で3件の違反を出す）ことから、`Verify` は
+     文書間参照の整合性チェック自体を行っていないと判断した。したがって
+     `Verify` の "valid" は文書間参照の解決性の証拠にはならず、
+     `pyshacl --with` を置き換えるものではない。
+  2. **既知の未修正issue**（[spdx/tools-java#283](https://github.com/spdx/tools-java/issues/283)、
+     v2.0.7時点でOPEN）: 依存する `Spdx-Java-Library` のインメモリストアが
+     全要素IDを大文字小文字区別なしで扱っており（SPDX 2.x のライセンス参照ID
+     向けの挙動が全IDに誤って適用されている）、大文字小文字だけが異なる
+     ファイルパスを誤って「重複ID」と報告することがある。本プロジェクトの
+     Xenツリー（両ビルド環境の`external/xen/xen`・`external/xen`全体）を
+     確認し、該当する大文字小文字違いのファイルパスは0件であることを確認済み
+     — 現時点で実害はないが、`validate-spdx.sh` にコメントとして明記した。
+- **バージョン固定の理由**: 上記issueの修正が将来のリリースに入る可能性が
+  あるため、`fetch-spdx-tools-java.sh` はバージョンを明示的に固定し、
+  バンプ時はissueの状況を確認するようコメントで指示している。

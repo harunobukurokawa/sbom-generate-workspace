@@ -3,7 +3,7 @@
 *これまで、生成 SBOM の「妥当性」は簡易な JSON-LD 構造検証（`@graph` の存在、
 要素数の確認）のみで確認されてきた。本書は、実際に生成した文書
 （`analysis/xen-full/`）を SPDX 公式ツールで検証した結果と、その過程で
-判明した2つの注意点（既知・無害）を記録する。*
+判明した3つの注意点（既知・無害）を記録する。*
 
 ## 1. `spdx-tools`（pip: `spdx-tools`、通称 "pyspdxtools"）が使えない理由
 
@@ -58,7 +58,7 @@ pip install -r scripts/validate-spdx-requirements.txt
 
 両文書とも、実質的には SPDX 公式ツールによる基準を満たしている。現れた
 2つの逸脱はいずれも、ツール側の既知の制約であり、生成データの欠陥ではない
-（詳細は以下）。
+（詳細は以下）。§4 で第3の独立バリデータ（`Verify`）とその注意点を追加する。
 
 ### 注意点1: `@context` を配列にするのは有効な JSON-LD だが、JSON Schema は文字列リテラルを要求する
 
@@ -138,12 +138,55 @@ Conforms: True
 単独で検証したことによる副作用であり、関係性そのものの欠陥ではないことが
 証明された。
 
-## 4. B-1 の結論
+## 4. 第3のバリデータ: SPDX Java Tools `Verify`
 
-生成した Xen SBOM（`analysis/xen-full/`）は、上記2つのツール側の既知の
-制約を踏まえれば、SPDX 公式ツール（`check-jsonschema` + `pyshacl`）による
-構造・意味の両面で妥当である。`spdx-tools`／`pyspdxtools` はこの用途の
-バリデータとして使えないため、これ以上の追求は不要と判断する。
+`check-jsonschema` と `pyshacl` はいずれも Python 実装である。一方
+`spdx/tools-java`（[tools.spdx.org](https://tools.spdx.org) の Validate
+ページの裏側で動いているエンジン、つまり広い SPDX コミュニティが
+「SPDXファイルを検証する」際に多くの場合実際に目にしている実装）は、
+完全に独立した Java ベースのリファレンス実装である。
+`scripts/fetch-spdx-tools-java.sh`（v2.0.7 に固定。pip パッケージではない）
+で取得し、`java -jar ... Verify FILE.spdx.json JSONLD` として実行する。
+
+**結果:** 注意点1と同じ `@context` 平坦化を行った後、`Verify` は
+`sbom-build.spdx.json`・`sbom-output.spdx.json` の両方に対して
+`This SPDX Document is valid.` と報告した。`sbom-build.spdx.json` は
+**単独**でもこの結果であり、注意点2で `pyshacl` に必要だった `--with`
+結合は不要だった。ただしこれは `Verify` が `pyshacl` より優れているという
+意味ではない: `Verify` は一度に1ファイルしか受け付けず（結合オプションは
+存在しない)、そもそも文書間参照の整合性チェック自体を行っていないと見られる。
+つまり `Verify` の "valid" は、`Relationship.from`/`to` が同伴文書の要素を
+正しく参照解決できることの証拠にはならない。その確認は引き続き
+`pyshacl --with` が担う。
+
+### 注意点3: `Verify` は大文字小文字だけが異なるファイルパスを誤って「重複ID」と報告することがある
+
+上流の [spdx/tools-java#283](https://github.com/spdx/tools-java/issues/283)
+（"Case-Sensitive IRI as spdxId"）として報告されており、v2.0.7 時点でも
+未修正（OPEN）。大文字小文字を区別するファイルシステム上で正当に別ファイルと
+して存在する2つのファイル（例: `xt_hl.ko` と `xt_HL.ko`）のパスが、
+大文字小文字の違いだけで同一とみなされ、有効な文書に対して
+`"Object URI already exists"`（重複ID）エラーが誤って報告されることがある。
+メンテナによる原因特定: 依存ライブラリ `Spdx-Java-Library` のインメモリ
+ストアが、全ての要素IDを大文字小文字区別なしで扱っている。これは本来
+SPDX 2.x のライセンス参照ID（大文字小文字を区別しない仕様）のためだけに
+必要な挙動であり、通常の要素IDにまで誤って適用されている。修正には
+ID種別ごとの区別が必要で、issue の最終更新時点でも設計方針の議論が続いていた。
+
+本プロジェクトでの確認: 両方のビルド環境の Xen チェックアウト
+（`external/xen/xen`、および `external/xen` 全体）を確認したが、大文字小文字
+だけが異なるファイルパスの衝突は0件だった。したがって現時点でこの問題は
+本プロジェクトでは発生していない。今後 `Verify` が重複IDエラーを報告した
+場合は、まず大文字小文字の衝突の可能性を確認し、生成データ自体の欠陥と
+即断しないこと。
+
+## 5. B-1 の結論
+
+生成した Xen SBOM（`analysis/xen-full/`）は、上記のツール側の既知の制約を
+踏まえれば、3つの独立した SPDX 3.0.1 公式実装（`check-jsonschema`・
+`pyshacl`・Java版 `Verify`）による構造・意味の両面で妥当である。
+`spdx-tools`／`pyspdxtools` はこの用途のバリデータとして使えないため、
+これ以上の追求は不要と判断する。
 
 **今回の範囲外・未実施:**
 

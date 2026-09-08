@@ -4,7 +4,7 @@
 ad-hoc JSON-LD structural check (`@graph` present, element counts as
 expected). This document records the result of validating the actual
 generated documents (`analysis/xen-full/`) with the official SPDX tooling,
-and the two caveats that surfaced along the way.*
+and the three caveats that surfaced along the way.*
 
 ## 1. Why `spdx-tools` (pip: `spdx-tools`, aka "pyspdxtools") cannot be used
 
@@ -59,7 +59,8 @@ below, which it works around / documents automatically).
 
 Both documents are, in substance, valid per the official SPDX 3.0.1 tooling.
 The two deviations that appeared are both documented, known limitations of
-the tools — not defects in the generated data — as detailed below.
+the tools — not defects in the generated data — as detailed below. §4 adds
+a third, independent validator (`Verify`) and its own caveat.
 
 ### Caveat 1: `@context` as an array is valid JSON-LD, but the JSON Schema requires the literal URL string
 
@@ -139,13 +140,52 @@ with zero violations — proving the 3 build-document violations were purely
 an artifact of `pyshacl` validating one document in isolation, not a defect
 in the relationships themselves.
 
-## 4. Conclusion for B-1
+## 4. A third validator: SPDX Java Tools `Verify`
+
+`check-jsonschema` and `pyshacl` are both Python; `spdx/tools-java` (the
+engine behind [tools.spdx.org](https://tools.spdx.org)'s Validate page, i.e.
+what much of the wider SPDX community sees when they "validate an SPDX
+file") is a fully independent, Java-based reference implementation. Fetched
+by `scripts/fetch-spdx-tools-java.sh` (pinned to v2.0.7; not a pip package)
+and run as `java -jar ... Verify FILE.spdx.json JSONLD`.
+
+**Result:** after the same caveat-1 `@context` flattening, `Verify` reports
+`This SPDX Document is valid.` for both `sbom-build.spdx.json` and
+`sbom-output.spdx.json` — including `sbom-build.spdx.json` **on its own**,
+without the `--with` merge that caveat 2 requires for `pyshacl`. This is not
+`Verify` succeeding where `pyshacl` needed help: `Verify` takes exactly one
+file (no merge option) and does not appear to check cross-document
+referential integrity at all, so a `Verify` "valid" is not itself evidence
+that a `Relationship.from`/`to` reference into a companion document
+resolves. `pyshacl --with` remains the check for that.
+
+### Caveat 3: `Verify` can report a false "duplicate ID" for case-only-differing file paths
+
+Documented upstream as [spdx/tools-java#283](https://github.com/spdx/tools-java/issues/283)
+("Case-Sensitive IRI as spdxId"), open as of v2.0.7. Two genuinely distinct
+files whose paths differ only by case (e.g. `xt_hl.ko` vs `xt_HL.ko`, both
+real files on a case-sensitive filesystem) can produce an `"Object URI
+already exists"` error on an otherwise valid document. Root cause per the
+maintainer: the underlying `Spdx-Java-Library`'s in-memory store treats
+*all* element IDs as case-insensitive, a behaviour that is only correct for
+SPDX 2.x's case-insensitive license reference IDs; a fix requires
+distinguishing the two ID kinds and was still under design discussion as of
+the issue's last activity.
+
+Checked for this project: no case-only-differing file paths exist in either
+build environment's Xen checkout (`external/xen/xen` or the full
+`external/xen` tree), so this has not manifested here. Treat a
+`Verify` duplicate-ID error as a hint to check for a case collision before
+assuming a real defect in the generated data.
+
+## 5. Conclusion for B-1
 
 The generated Xen SBOM (`analysis/xen-full/`) is valid, both structurally and
-semantically, according to the official SPDX 3.0.1 tooling (`check-jsonschema`
-+ `pyshacl`), once the two documented tooling limitations above are accounted
-for. `spdx-tools`/`pyspdxtools` is not a viable validator for this use case
-and should not be pursued further for it.
+semantically, according to three independent, official SPDX 3.0.1
+implementations (`check-jsonschema`, `pyshacl`, and the Java `Verify` tool),
+once the documented tooling limitations above are accounted for.
+`spdx-tools`/`pyspdxtools` is not a viable validator for this use case and
+should not be pursued further for it.
 
 **Not yet done / out of scope for this pass:**
 

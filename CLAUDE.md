@@ -74,10 +74,14 @@ python3 scripts/xen-sbom-poc/gen_xen_sbom.py \
     external/linux/scripts/sbom external/xen/xen analysis/arm64 prelink.o
 ```
 
-Validate output with the official SPDX tools (deps pinned in
-`scripts/validate-spdx-requirements.txt`). `--with` merges the documents'
-`@graph` first, which is needed because `sbom-build` references three nodes
-that live in `sbom-output`:
+Validate output with three independent official SPDX tools: `check-jsonschema`
++ `pyshacl` (Python, deps pinned in `scripts/validate-spdx-requirements.txt`)
+and the SPDX Java Tools `Verify` (fetched once via
+`scripts/fetch-spdx-tools-java.sh`; needs Java 17+ to run). `--with` merges the
+documents' `@graph` first for the `pyshacl` pass, which is needed because
+`sbom-build` references three nodes that live in `sbom-output` -- `Verify` has
+no merge option and does not check cross-document references at all, so its
+"valid" is not evidence that those references resolve:
 
 ```bash
 scripts/validate-spdx.sh --with analysis/xen-full/sbom-build.spdx.json \
@@ -178,7 +182,8 @@ Generated SBOMs and run logs are kept selectively under `analysis/`
 and `analysis/sample-*` are illustrative snapshots, not build output.
 
 Validation is no longer structural-only: B-1 is done. `scripts/validate-spdx.sh`
-runs the official `check-jsonschema` and `pyshacl` against the generated
-documents, and no local `spdx-3-model` checkout or manual "`@context` expansion"
-step turned out to be needed. Results and the two known benign caveats are in
-`docs/{en,ja}/06-external-validation.md`.
+runs three independent official implementations against the generated
+documents -- `check-jsonschema`, `pyshacl`, and the Java `Verify` tool (added
+later, see below) -- and no local `spdx-3-model` checkout or manual
+"`@context` expansion" step turned out to be needed. Results and the three
+known benign caveats are in `docs/{en,ja}/06-external-validation.md`.

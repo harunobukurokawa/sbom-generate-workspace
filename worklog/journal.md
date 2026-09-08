@@ -830,3 +830,46 @@ grep するのではなく構造化された形で検知・報告できるよう
 （新規）。テスト: `tests/test_xen_parsers.py::TestUnknownCommandsReport`,
 `tests/test_diff_unknown_commands.py`（新規）。`worklog/backlog.md` の B-12
 に実装内容を追記。
+
+## 2026-09-08 3つ目の SPDX バリデータ（SPDX Java Tools `Verify`）を追加
+
+ユーザーから `tools.spdx.org`／`spdx/spdx-online-tools` を SPDX バリデーション
+に併用できないかという相談があり、調査・実装した。
+
+調査: `spdx-online-tools` はログイン必須の Django フルスタックWebサイト
+（Valkey、Selenium テストまで含む）で、検証機能単体のために導入するには
+過剰と判断。ソースを読み、実際の検証処理は `org.spdx.tools.Verify`
+（`spdx/tools-java`、通称 "SPDX Java Tools"、最新 v2.0.7）という別リポジトリの
+Javaライブラリに委譲されていることを特定。`SerFileType.JSONLD` として
+SPDX 3.0.1 JSON-LD を直接扱えることも確認した。
+
+ユーザーからの追加確認依頼: 「Javaでの実装であることによる制約として、
+大文字小文字を区別しないファイルシステム前提の実装になっているのでは」との
+以前の評価の裏取りを依頼された。GitHub issue検索で
+[spdx/tools-java#283](https://github.com/spdx/tools-java/issues/283)
+「Case-Sensitive IRI as spdxId」を発見（v2.0.7時点でOPEN）。メンテナ
+(`goneall`)の調査により、依存する `Spdx-Java-Library` のインメモリストアが
+全要素IDを大文字小文字区別なしで扱っていること（SPDX 2.x のライセンス参照ID
+向けの挙動が誤って全IDに適用されている）が根本原因と判明。実際に
+`java -jar ... Verify` コマンドで再現された報告であることも確認した。
+両ビルド環境のXenツリーを確認し、該当する大文字小文字違いのファイルパスは
+0件（実害なし）であることを確認した。
+
+実装:
+- `scripts/fetch-spdx-tools-java.sh`（新規）: v2.0.7のリリースzipから
+  jar-with-dependenciesのみ抽出して取得。
+- `scripts/validate-spdx.sh`: 第3の検証パス「Reference validation (SPDX
+  Java Tools Verify)」を追加。既存の `@context` 平坦化ロジックを再利用。
+  ヘッダコメントに注意点3件（既存2件 + 新規の大文字小文字issue）を整理して記載。
+- `scripts/validate-spdx-requirements.txt`: Javaツールはpipパッケージでは
+  ない旨のコメントを追加。
+
+実機検証（10.166.16.22:62223）: `openjdk-17-jre-headless` をインストールし、
+`fetch-spdx-tools-java.sh` でjarを取得。`analysis/xen-full/` の実データに対し
+`validate-spdx.sh --with sbom-build.spdx.json sbom-output.spdx.json` を
+フル実行し、3バリデータすべてが成功することを確認
+（check-jsonschema: ok、Verify: both valid、pyshacl: Conforms: True）。
+
+ドキュメント: `docs/{en,ja}/06-external-validation.md` に §4（Verifyの結果と
+注意点3）を追加し、結論を §5 に更新。`CLAUDE.md` の該当箇所も更新。
+`worklog/decisions.md` にADR-0013、`worklog/backlog.md` のB-1に追記。
