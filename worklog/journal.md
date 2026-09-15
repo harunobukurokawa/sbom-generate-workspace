@@ -919,3 +919,22 @@ Xenのriscv64コードは`#error Sorry, please use GCC >= 12.2`によりビル�
 x86_64ベースラインとの`diff_unknown_commands.py`比較で**新規の未知コマンドは
 0件**。これでarm64・arm32・pvshim・riscv64の4種類の非デフォルトconfigで
 パーサーの新規欠落なしを確認済みとなった。`worklog/backlog.md`のB-11に追記。
+
+## 2026-09-15 ppc64_defconfig の実ビルド検証、B-11完了
+
+ユーザーから「ppc64のクロスコンパイラを導入して試してみて」との依頼があり、
+62222環境で実施した。riscv64と異なり、`arch/ppc/arch.mk`が`-mlittle-endian`/
+`-m elf64lppc`を指定していることを確認し、big-endian版ではなく
+`gcc-powerpc64le-linux-gnu`（GCC 11.4.0）を選定・導入。
+
+`compiler.h`のGCCバージョンゲート（`CONFIG_GCC_VERSION < 120200`）はriscv専用の
+分岐であることを確認済みだったため、riscv64のようなラッパー対応は不要と判断。
+実際、追加のワークアラウンドなしで一発でビルド成功（`xen`バイナリ、
+`prelink.o`とも生成、有効config 39件）。SBOM生成も正常終了し、x86_64
+ベースラインとの`diff_unknown_commands.py`比較で**新規の未知コマンドは0件**。
+
+これによりB-11（他defconfigでのパーサー網羅性確認）の完了条件
+（対象コンフィグごとの未知コマンド数の一覧化）を満たしたと判断し、
+ステータスを✅に更新。x86_64・pvshim・arm64・arm32・riscv64・ppc64の
+6種類のconfig/archすべてで新規欠落なしを確認済み。`worklog/backlog.md`の
+B-11に完了記録を追記。
