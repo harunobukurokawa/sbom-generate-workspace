@@ -873,3 +873,49 @@ SPDX 3.0.1 JSON-LD を直接扱えることも確認した。
 ドキュメント: `docs/{en,ja}/06-external-validation.md` に §4（Verifyの結果と
 注意点3）を追加し、結論を §5 に更新。`CLAUDE.md` の該当箇所も更新。
 `worklog/decisions.md` にADR-0013、`worklog/backlog.md` のB-1に追記。
+
+## 2026-09-15 defconfig切り替えによるパーサー網羅性の追加検証（B-11一部実施）
+
+ユーザーから「defconfigを切り替えた場合の検証は可能か」との相談があり、
+62222環境（`10.166.16.22:62222`）で実施した。
+
+まず両ビルド環境（62222・62223）のgitリポジトリを最新（`origin/main`
+`2b31698`）に同期。62223側は改行コード違いによる衝突を解消してから
+fast-forward、62222側は`origin`リモート未設定だったため追加し、
+マージ済みで既にGitHub側で削除済みの`feature/arm64-sbom-support`ブランチも
+削除。両側でテスト全件pass、`analysis/xen-full/`等の衝突なしを確認して完了。
+
+defconfig検証は、追加インストール不要な x86 系（`x86_32_defconfig`,
+`pvshim_defconfig`）を対象とした:
+- `x86_32_defconfig`を試みたところ**空（0バイト）ファイル**と判明。
+  `XEN_TARGET_ARCH=x86_32`で明示的にconfigureしても`.config`は
+  `CONFIG_X86_64=y`のまま変化せず、意味のある32bit専用ビルドの差分は
+  存在しないことを確認。この対象は検証から除外。
+- `pvshim_defconfig`（有効config 73件、x86_64の108件から大幅変更、
+  `CONFIG_PV_SHIM`等を新規有効化）で実際にビルド（`/tmp`に別コピーした
+  ツリーで、既存のx86_64ビルドを保全）、SBOM生成とも正常終了。
+  `diff_unknown_commands.py`でx86_64ベースラインと比較した結果、
+  **新規の未知コマンドは0件**。config差分自体は正しく提示された。
+
+これによりB-11（他defconfigでのパーサー網羅性確認）を部分的に前進させたが、
+`ppc64_defconfig`/`riscv64_defconfig`はクロスコンパイラ未導入のため未着手。
+`worklog/backlog.md`のB-11に詳細を追記。
+
+## 2026-09-15 riscv64_defconfig の実ビルド検証（B-11続き）
+
+前段のpvshim検証に続き、ユーザーから「riscv64の試行が可能か」との確認依頼が
+あり、62222環境で実施した。
+
+`gcc-riscv64-linux-gnu`はaptで入手可能だが既定でGCC 11がインストールされ、
+Xenのriscv64コードは`#error Sorry, please use GCC >= 12.2`によりビルド時に
+拒否された。`gcc-12-riscv64-linux-gnu`（GCC 12.3.0）を追加導入し、
+`riscv64-linux-gnu-gcc`という名前でGCC 12を解決させるシンボリックリンクを
+`/tmp`に作成してPATH先頭に置くことで対処（`CC=riscv64-linux-gnu-gcc-12`の
+直接指定では反映されなかった。Xenのビルドシステムが`$(CROSS_COMPILE)gcc`
+という固定名でコンパイラを解決するため）。
+
+`/tmp`に別コピーしたXenツリー（既存のx86_64ビルドを保全）で
+`riscv64_defconfig`（有効config 47件）を用いてビルド・SBOM生成とも正常終了。
+x86_64ベースラインとの`diff_unknown_commands.py`比較で**新規の未知コマンドは
+0件**。これでarm64・arm32・pvshim・riscv64の4種類の非デフォルトconfigで
+パーサーの新規欠落なしを確認済みとなった。`worklog/backlog.md`のB-11に追記。

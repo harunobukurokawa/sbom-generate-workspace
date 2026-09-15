@@ -234,6 +234,33 @@ B-2 の必要性を調べた結果、当初の「P1・FuSa 直結」は**推論�
 - 手法: `docs/*/07` §4.1 の測定手順（全 savedcmd に対する獲得パーサー比較）を再利用。
 - 完了条件: 対象コンフィグごとの未知コマンド数を一覧化し、必要なパーサーを起票。
 - B-5（上流貢献）の説得材料になる（「arch 差ではなくコンフィグ差」は上流にも有用）。
+- **2026-09-15 一部実施（`pvshim_defconfig`, `x86_64`, 62222環境）**: `diff_
+  unknown_commands.py` の実地検証を兼ね、x86 系の別defconfigで確認した。
+  - `arch/x86/configs/x86_32_defconfig` は **0バイトの空ファイル**と判明
+    （`x86_64_defconfig` も同様）。`XEN_TARGET_ARCH=x86_32` で configure しても
+    `.config` は `CONFIG_X86_64=y` のままで変化なし — Xen のハイパーバイザーは
+    現行版で常に64bitであり、32bit専用ビルドという意味のある差分はもはや
+    存在しないことを確認。今回は検証対象から除外した。
+  - `pvshim_defconfig`（有効config 73件、x86_64 defconfigの108件から大幅に
+    絞ったPV-shim専用ビルド。`CONFIG_PV_SHIM`/`CONFIG_XEN_GUEST`/
+    `CONFIG_PVH_GUEST`等を新規に有効化し`CONFIG_HYPFS`等を無効化）でビルド・
+    SBOM生成とも正常終了（exit 0）。x86_64ベースラインとの`diff_unknown_
+    commands.py`比較で**新規の未知コマンドは0件**。ADR-0011の知見
+    （欠落はconfig依存）に沿って大きなconfig差分自体は正しく提示されたが、
+    パーサー欠落には至らなかった。
+  - **未実施**: `arm32_defconfig`（別環境で検証済み、こちらもparser既存カバー
+    範囲内で新規欠落0件）、`ppc64_defconfig`（クロスコンパイラ未導入のため
+    未着手）。完了条件（全対象コンフィグの一覧化）には未到達。
+- **2026-09-15 追加（`riscv64_defconfig`, 62222環境）**: `gcc-riscv64-linux-gnu`
+  はUbuntu 22.04のaptで入手可能だが、既定でインストールされるのはGCC 11で、
+  Xenのriscv64サポートは `#error Sorry, please use GCC >= 12.2` によりビルド時に
+  拒否される。別パッケージ`gcc-12-riscv64-linux-gnu`（GCC 12.3.0）を追加導入し、
+  `riscv64-linux-gnu-gcc` → `-gcc-12` を指すラッパーディレクトリをPATH先頭に
+  置くことで解決（Xenのビルドシステムは`$(CROSS_COMPILE)gcc`名でコンパイラを
+  解決するため、`CC=`の直接指定では反映されなかった）。ビルド・SBOM生成とも
+  正常終了（有効config 47件、CONFIG_RISCV_64等）。x86_64ベースラインとの比較で
+  **新規の未知コマンドは0件**。これでarm64・arm32・pvshim・riscv64の4種類の
+  非デフォルトconfigで新規欠落なしを確認済み。残るは`ppc64_defconfig`のみ。
 
 ### B-12 ⬜ P?（要 Xen コミュニティ合意）— パーサー層の保守方針
 - 背景: 伊藤さんのレビュー指摘（2026-08-20、FuSa SIG 向け資料のレビュー時）。
