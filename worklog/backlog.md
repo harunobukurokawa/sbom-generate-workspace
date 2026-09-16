@@ -308,6 +308,63 @@ B-2 の必要性を調べた結果、当初の「P1・FuSa 直結」は**推論�
     `tests/test_diff_unknown_commands.py`。
   - 決定の経緯は `worklog/decisions.md` の該当 ADR を参照。
 
+### B-13 ⬜ P3 — Zephyr（`west spdx`）のSBOM生成手法との比較調査（他プロジェクトの先例）
+- **背景**: 2026-09-16、Zephyr RTOSのビルド環境におけるSBOM生成手法を調査した
+  （ユーザー依頼: 「言語レベル・関数・共有データオブジェクトレベルでの依存関係
+  調査を行っているか」「オブジェクト生成の段階ごとの依存関係調査か、大規模な
+  リンク処理のみの依存関係調査か」「Functional Safetyに関わる情報収集を行って
+  いるか、行っている場合の手法」）。現行の標準環境（`zephyrproject-rtos/zephyr`
+  本流の `west spdx` / `scripts/pylib/zspdx/`）と、開発途上のコミュニティ議論
+  （GitHub Discussions/Issues、FOSDEM資料）の両方を調査した。本項目はXen SBOM
+  PoCの設計判断に直結する新規タスクではなく、**他プロジェクトの先例を今後の
+  参照材料として記録**するもの。
+- **調査結果の要点**:
+  1. **依存関係の粒度（言語/関数/共有データオブジェクトレベルか）**: 行っていない。
+     `zspdx/walker.py` を実際に読んで確認したところ、依存関係の最小単位は
+     **ソースファイル**であり、CMakeターゲットの`sources`リストにあるファイルを
+     `GENERATED_FROM`関係でビルド成果物に結びつけるのみ。`--analyze-includes`
+     オプションでヘッダファイル単位の`#include`展開を追加できるが、これも
+     ファイル単位（プリプロセッサレベル）に留まり、関数・シンボル・特定の
+     `extern`変数といった言語内部の依存追跡はない。GitHub Discussion #69755等の
+     コミュニティ側の要望も「ファイル単位→モジュール単位」の粒度改善止まりで、
+     関数/シンボルレベルの要望自体が見当たらない。
+  2. **段階ごとの依存関係調査か、大規模リンクのみか**: **中間段階（CMakeターゲット
+     単位）ごとに追跡しているが、個々の`.o`オブジェクトファイル単位までは
+     追っていない**。`walk_targets()`が全CMakeターゲット（UTILITY型を除く）を
+     走査し、各ターゲットの成果物←ソースファイル（`GENERATED_FROM`）、成果物←
+     依存する他ターゲットの成果物（`STATIC_LINK`）を段階的に記録する。本PoC
+     （Xen/Linux KernelSbom方式、`.cmd`ファイル単位=`.o`ごとに`savedcmd`を追う）
+     と比べると、**1段階粗い粒度**（「ソース→ライブラリ全体」を直接結び、個々の
+     `.o`を経由しない）。
+  3. **Functional Safetyに関わる情報収集・手法の議論**: Zephyr Safety Committeeが
+     IEC 61508 SIL3（既存コードベースのためroute 3s/1sアプローチ）、将来的に
+     ISO 26262 ASIL D等を目標に活動中。要求管理はStrictDoc（要求記述）+
+     Doxygenタグ（コード/テストから要求を参照）+トレーサビリティマトリクス
+     （HTML/CSV）+ Twister（テスト結果）の組み合わせで運用されているが、公式の
+     Safety Requirements文書自体には**SBOM/SPDXへの直接言及はない**ことを確認
+     （現状、要求トレーサビリティとSBOM生成は別々に発展している）。SBOMと安全性
+     証跡を接続する具体的な手法としては、FOSDEM 2024の発表
+     "SPDX Safety Profile - Zephyr & StrictDoc Example" が
+     **SPDXのSafety Profile（REQUIREMENT/VERIFICATION/EVIDENCEクラス）**と
+     StrictDocの組み合わせを提案している。これは本PoCのB-2で確認済みの
+     「SPDX 3.1 Safety ProfileはFOSDEM 2026時点でもRelease Candidate」という
+     認識と整合し、Zephyr側も同じSPDX Safety Profileを軸に議論しているが、
+     **実装より提案・議論が先行している段階**（2026年中の「end-to-endの認証
+     プラクティス例」完成を目標、完了は2027年以降の可能性）。
+- **本PoCへの示唆（今後の検討材料。今回はタスク化しない）**:
+  - 本PoCが採用しているKernelSbom方式（`.o`単位の`.cmd`ファイルを追う）は、
+    Zephyrの`west spdx`（CMakeターゲット単位）より**既に1段細かい粒度**で
+    動いている。関数/シンボルレベルへの深化は、Zephyr側でも要望・議論の
+    形跡がなく、本PoCとしても優先度を上げる材料はない。
+  - Functional Safetyとの接続手法（SPDX Safety Profile + StrictDoc）は、
+    B-2（SPDX 3.1 Safety Profileの成熟度待ち）の判断に対する**他プロジェクトの
+    追加の先行事例**として参考にできる。B-2の「時期尚早」判断（Safety Profileが
+    RC段階）を裏付ける材料として使える。
+  - 完了条件: 特になし（継続的な参考情報としてバックログに記録するのみ）。
+    B-2再検討時に参照。
+- 詳細な調査結果とソースは、このタスクを行った会話ログ（本ブランチ
+  `Quote_from_Zephyr` 作成の契機）を参照。
+
 ## 推奨順序（2026-08-06 改訂: B-6 完了）
 標準が安定し必要性が明確なものを優先: **B-3 → B-8 → B-11 → B-0 →（B-0=Yes なら）B-2 → B-4 → B-5 → B-9 → B-10**。
 次の着手は **B-3**（tools/libs コレクタ）— B-6 完了により変わらず。

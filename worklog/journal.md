@@ -938,3 +938,35 @@ x86_64ベースラインとの`diff_unknown_commands.py`比較で**新規の未�
 ステータスを✅に更新。x86_64・pvshim・arm64・arm32・riscv64・ppc64の
 6種類のconfig/archすべてで新規欠落なしを確認済み。`worklog/backlog.md`の
 B-11に完了記録を追記。
+
+## 2026-09-16 Zephyr（west spdx）のSBOM生成手法を調査、B-13として記録
+
+ユーザーから、Zephyr RTOSのビルド環境におけるSBOM生成手順の調査依頼があった。
+現行の標準環境（`zephyrproject-rtos/zephyr`本流の`west spdx`）と、開発途上の
+コミュニティ議論（GitHub Discussions/Issues、FOSDEM資料）の両方を対象に、
+以下3点を中心に調査した:
+1. 言語レベル・関数・共有データオブジェクトレベルでの依存関係調査の有無
+2. オブジェクト生成の段階ごとの依存関係調査か、大規模リンク処理限定か
+3. Functional Safetyに関わる情報収集の有無と、実現手法の議論状況
+
+`scripts/pylib/zspdx/walker.py`（GitHub API経由で実際に全文読了）と、
+Web検索（GitHub Discussions #69755・#108287、Issue #105917、Zephyr公式blog、
+Zephyr Safety Requirements文書、FOSDEM 2024/2026資料）を組み合わせて調査した。
+
+結果の要点:
+- 依存関係の粒度はソースファイル単位のみで、関数/シンボル/データオブジェクト
+  レベルの追跡はない（`--analyze-includes`でヘッダファイル単位の追加は可能だが
+  これもファイル単位）。
+- CMakeターゲット単位（中間ライブラリ含む）で段階的に`GENERATED_FROM`/
+  `STATIC_LINK`関係を記録しているが、`.o`オブジェクトファイル単位までは
+  追っておらず、本PoC（Xen/Linux KernelSbom方式）より1段粗い粒度。
+- Zephyr Safety Committeeによる要求トレーサビリティ（StrictDoc+Doxygen+
+  Twister）は運用されているが、公式文書にSBOM/SPDXへの直接言及はなし。
+  FOSDEM 2024の発表がSPDX Safety Profile（REQUIREMENT/VERIFICATION/EVIDENCE
+  クラス）+StrictDocの組み合わせを提案しているが、実装より議論が先行している
+  段階。
+
+調査結果は本PoCの新規タスクとしてではなく、**他プロジェクトの先例としての
+参考情報**として`worklog/backlog.md`のB-13に記録した。B-2（SPDX Safety
+Profileの成熟度待ち判断）を再検討する際の参照材料として位置づける。
+記録のためブランチ`Quote_from_Zephyr`を作成した。
