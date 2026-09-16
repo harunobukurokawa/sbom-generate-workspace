@@ -366,6 +366,30 @@ B-2 の必要性を調べた結果、当初の「P1・FuSa 直結」は**推論�
      認識と整合し、Zephyr側も同じSPDX Safety Profileを軸に議論しているが、
      **実装より提案・議論が先行している段階**（2026年中の「end-to-endの認証
      プラクティス例」完成を目標、完了は2027年以降の可能性）。
+  4. **補足（2026-09-16、FOSDEM 2026発表
+     "SBOMs for Embedded Firmware: The Zephyr RTOS Case Study"
+     [スライドPDF](https://archive.fosdem.org/2026/events/attachments/ZXJD8E-sboms_for_embedded_firmware_the_zephyr_rtos_case_study/slides/267475/sboms_for_tdgj7s4.pdf)
+     を全23ページ、テキスト抽出＋画像OCRの両方で確認）**: この発表の概要文には
+     「vendor HAL・アウトオブツリーモジュール・バイナリblobがある組込み特有の
+     難しさを扱う」と記載されていたが、**実際のスライドで裏付けられたのは
+     前2つのみ**で、「バイナリblob」への言及は23ページ中どこにも見つからな
+     かった（要約は概要文のみに基づく過大な記述だったので訂正）。実際の内容:
+     - **Vendor HAL**: 依存グラフの図（「アプリコードは氷山の一角」節）で
+       `Zephyr kernel / Silicon Vendor HAL / 3rd party lib / mbedTLS`が並ぶ
+       構成要素として描かれるのみで、特別な生成手法は示されていない。
+     - **サードパーティ/アウトオブツリーモジュール**: 「Zephyr modules」節で
+       `mbedtls`の`zephyr/module.yml`（`security.external-references`に
+       CPE/purlを記載）を実例に、`cve-bin-tool --sbom spdx`でCVEスキャンする
+       デモ（mbed_tls 3.6.2の複数CVEを重要度付きで検出）を紹介。これは
+       `walker.py`の`setup_modules_deps_component()`が生成する`-deps`
+       パッケージ（PR #66182後継の仕組み）の実演にあたる。
+     - **SPDX 3対応**: "Software, Security, Licensing, Build, AI/ML, …"を
+       関連プロファイルとして一覧で挙げるのみで、AI/MLアーティファクトの
+       扱いを深く掘ったスライドはない。デモはBuildプロファイル
+       （Package/File/Tool/Configのグラフ可視化、`LifecycleScopedRelationship`
+       によるコンパイル情報の記録）が中心。設定（config）のSBOMへの格納方法は
+       「複雑で、SBOMに置くべきものか自問している」と発表者自身が未解決の
+       open questionとして述べている。
 - **本PoCへの示唆（今後の検討材料。今回はタスク化しない）**:
   - 本PoCが採用しているKernelSbom方式（`.o`単位の`.cmd`ファイルを追う）は、
     Zephyrの`west spdx`（CMakeターゲット単位）より**既に1段細かい粒度**で
