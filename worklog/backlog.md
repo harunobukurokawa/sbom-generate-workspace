@@ -328,6 +328,21 @@ B-2 の必要性を調べた結果、当初の「P1・FuSa 直結」は**推論�
      `extern`変数といった言語内部の依存追跡はない。GitHub Discussion #69755等の
      コミュニティ側の要望も「ファイル単位→モジュール単位」の粒度改善止まりで、
      関数/シンボルレベルの要望自体が見当たらない。
+     - **補足（2026-09-16、PR [#66182](https://github.com/zephyrproject-rtos/zephyr/pull/66182)
+       の実差分を確認）**: 「ファイル単位→モジュール単位」の改善の実体は、
+       **個々のファイルの追跡粒度自体は変えず、SPDXパッケージへのグルーピングを
+       分割した**というもの。変更前は`zephyr-sources`という単一パッケージが
+       Zephyrコア+全モジュール（`hal_nordic`等）を一括して覆っていた。変更後は
+       (1) `CMakeLists.txt`が`zephyr_module.py`の出力するモジュール一覧
+       （name/path）を安定パス`KERNEL_META_PATH`に書き出し、(2) `walker.py`の
+       `setupZephyrDocument()`がそのモジュールごとに`SPDXRef-<module>-sources`
+       という**別パッケージ**を追加生成し、(3) ファイル→パッケージの割り当てを
+       単一固定パッケージへの割当から、**zephyr文書内の全パッケージの中で
+       `relativeBaseDir`が最も深く（具体的に）マッチするものを選ぶ**方式
+       （`findPackageFromSrcAbsPath`）に汎用化した。この「workspace内の
+       モジュール一覧を無条件に列挙する」設計が、後のDiscussion #108287
+       （無効/未使用モジュールまでSBOMに載る問題）の直接の原因になっている
+       ことも確認した。
   2. **段階ごとの依存関係調査か、大規模リンクのみか**: **中間段階（CMakeターゲット
      単位）ごとに追跡しているが、個々の`.o`オブジェクトファイル単位までは
      追っていない**。`walk_targets()`が全CMakeターゲット（UTILITY型を除く）を
