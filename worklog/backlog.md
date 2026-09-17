@@ -390,6 +390,57 @@ B-2 の必要性を調べた結果、当初の「P1・FuSa 直結」は**推論�
        によるコンパイル情報の記録）が中心。設定（config）のSBOMへの格納方法は
        「複雑で、SBOMに置くべきものか自問している」と発表者自身が未解決の
        open questionとして述べている。
+  5. **補足（2026-09-17、IEC 61508-3 §7.4.2.12/13 の実証6項目とZephyr側の
+     議論の対応関係を確認）**: ユーザー提示の6項目（想定安全要求／双方向
+     トレーサビリティ／アーキテクチャ制約証明／構造的テストカバレッジ／
+     コーディング規約遵守／セーフティマニュアル）について、
+     [doc/safety/safety_overview.rst](https://github.com/zephyrproject-rtos/zephyr/blob/main/doc/safety/safety_overview.rst)、
+     SEooC(Safety Element out of Context)論文
+     [Zephyr: An Ideal Platform for Introducing the Software...](https://ceur-ws.org/Vol-4184/paper6.pdf)、
+     [Safety FAQ](https://github.com/zephyrproject-rtos/zephyr/wiki/Safety-FAQ)
+     を確認した。
+     - **1. 想定安全要求**: 「Assumed Safety Requirements」という用語自体は
+       存在しないが、SEooC論文の"assumptions of use"（供給者が明示する前提）
+       が実質的に相当。統合者はZephyrをSOUP（Software of Unknown Provenance）
+       として扱い、その前提の下で製品安全要求を導出する、という**供給者⇔
+       統合者の役割分担モデル**（論文Table 1「4 Pillars」）で扱われている。
+     - **2. 双方向トレーサビリティ**: 「進行中」として明記。ただしSEooC論文は
+       「供給者側トレーサビリティ（要求→設計/コード→テスト）は再利用可能
+       だが、製品側（hazard→製品安全要求→Zephyr要求/artifact→アプリコード/
+       テスト）は統合者自身の責任」と明確に切り分けている。
+     - **3. アーキテクチャ制約証明**: Layered architecture・Encapsulated
+       components・Kconfigによる機能無効化は「既に実装済み、Safety Committee
+       による検証待ち」。SEooC論文は「ZephyrのメカニズムはSAC実現の**手段**を
+       提供するに過ぎず、制約自体の定義・エビデンスは製品レベルで統合者が
+       行うべき」と明言。
+     - **4. 構造的テストカバレッジ**: SIL3/SC3向けにentry points/statements/
+       branchesいずれも**100%が数値目標として明記**（未達部分は正当化文書
+       が必要）。**明示的な除外あり**: FAQで「ASIL D相当のMC/DCカバレッジは
+       実施予定がない」と明言（ISO 26262 ASIL D準拠を目指す上での既知の
+       ギャップとして自覚済み）。
+     - **5. コーディング規約遵守**: Stage I完了・Stage II進行中の段階的計画
+       として明記。BUGSENG社との協業でMISRA C:2012違反を50万件→1万件未満に
+       削減した実績あり。SEooC論文はMISRA Compliance:2020の「adopted code
+       向け簡易ルート」で供給者エビデンスを統合者の重複作業省略に使えるとし、
+       統合者自身のnativeコードへのフル適用は統合者の責任として残る、と整理。
+     - **6. セーフティマニュアル**: 作成自体は進めているが**一般公開されて
+       いない**。FAQに「Safety manual instructions（特定の有償ティアメンバー
+       のみアクセス可）が、特定HW/アプリケーション文脈でのZephyr safety
+       lifecycle artifact活用方法を提供する」と明記。項目自体は認識・着手
+       済みだが、アクセスを有償会員に限定するガバナンス上の選別がある。
+     - **明示的に除外・先送りとされているもの**: MC/DCカバレッジ（ASIL D
+       相当、実施予定なし）／特定ターゲットHW・デバイス・コンパイラ（統合者
+       責任）／医療機器・鉄道（EN 50126系）・航空（DO-178C）領域（スコープ外）
+       ／ISO 26262・ISO 62304/14971・IEC 60730/60335（確定日程なしで先送り）。
+       SEooC論文脚注42は、ハザード分析(HARA)・SIL/ASIL決定・HW/SW要求配分・
+       HW側定量指標・ツール適格性確認・量産後の運用保守等を「4本柱の外側」
+       として意図的に対象外と明記している。
+     - **全体所見**: Zephyr側は6項目のうち1・4（一部）・6を除き概念・計画
+       レベルでは言及があるが、SEooC論文が強調するのは「Zephyr（供給者）が
+       提供できるのはあくまで要素単体のエビデンスであり、製品（統合者）側の
+       安全ケース構築義務を代替しない」という構造的な切り分け。これは上記4.
+       の「SBOM/SPDX Safety Profileとの接続は議論が実装より先行」という
+       評価と整合する。
 - **本PoCへの示唆（今後の検討材料。今回はタスク化しない）**:
   - 本PoCが採用しているKernelSbom方式（`.o`単位の`.cmd`ファイルを追う）は、
     Zephyrの`west spdx`（CMakeターゲット単位）より**既に1段細かい粒度**で
