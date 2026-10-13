@@ -1029,3 +1029,29 @@ PR #66182の実際のdiffをユーザーの求めに応じて確認した。
 14971/60730/60335等は明示的にスコープ外・先送りとされている。
 
 `worklog/backlog.md`のB-13に要点5として追記した。
+
+## 2026-10-13 B-13補足: "A Safety BOM is a Contract" 発表の実アセスメント環境を調査
+
+ユーザーからTobias Kästner氏（inovex GmbH）/ Nicole Pappler氏（Alektometis）に
+よる発表"A Safety BOM is a Contract"の書き起こし（Markdown）とスライド資料
+（PDF、44ページ）が提供され、SPDX 3.1 Functional Safety Profileを使った
+Zephyrケーススタディの**実際のアセスメント環境が公開されているか**の調査
+依頼があった。検証環境は10.166.16.22:62222を指定されたが、今回は公開情報の
+Web/GitHub調査のみで完結し、Xenビルド環境自体は使わなかった（PDFのテキスト
+抽出のみ、リモートのpoppler-utils/tesseractを再利用）。
+
+PDFをリモート環境に転送し`pdftotext`で抽出した結果、スライドに明記された
+URL `https://github.com/tiacsys/affirmatrix/` を発見。`gh`コマンドで実在を
+確認し、`tiacsys` organization（TiaC Systems Network）の他リポジトリも調査
+した結果、`affirmatrix`（ツール本体、pre-alpha、Apache-2.0）とは別に、
+**実際にワークする適用例として`tiacsys/safety-toolbox`**（実在する小規模な
+Zephyr west module「Safe Data API」に対し、要求→実装→テスト→証跡の一連を
+`affirmatrix.yaml`で接続した自己完結的な実例）を発見した。
+<https://tiacsys.github.io/safety-toolbox/> として実際にGitHub Pagesで
+公開・稼働していることをブラウザで確認した。
+
+これはZephyr本体の公式Safety Committee認証プロセスとは別の、TiaC Systems
+Network独自の実証プロジェクトであり、Zephyrカーネル全体のSIL3認証を代替する
+ものではなく「手法が実際に動くことを示す、小規模だが本物のZephyrモジュールでの
+実証」という位置づけであることを確認した。`worklog/backlog.md`のB-13に要点6
+として追記した。

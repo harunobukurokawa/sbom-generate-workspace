@@ -441,15 +441,46 @@ B-2 の必要性を調べた結果、当初の「P1・FuSa 直結」は**推論�
        安全ケース構築義務を代替しない」という構造的な切り分け。これは上記4.
        の「SBOM/SPDX Safety Profileとの接続は議論が実装より先行」という
        評価と整合する。
+  6. **補足（2026-10-13、ユーザー提供資料
+     "A Safety BOM is a Contract"（Tobias Kästner, inovex GmbH /
+     Nicole Pappler, Alektometis による発表の書き起こし・スライドPDF）を
+     精査し、実アセスメント環境の公開有無を調査）**: 発表はSPDX 3.1
+     Functional Safety Profileを使い、要求・設計・実装・テスト・証跡を
+     「証跡グラフ」としてモデル化し、ドリフト検知（ハッシュによる内容照合）
+     とVerdict導出を行う`affirmatrix`というツールのZephyr適用事例を紹介した
+     もの。実際の環境は**公開されている**ことを確認:
+     - **ツール本体**: [tiacsys/affirmatrix](https://github.com/tiacsys/affirmatrix)
+       （Apache-2.0、公開）。README冒頭に"Status: pre-alpha scaffold, API not
+       stable."と明記。スライドの"heavily geared towards Zephyr-ish projects,
+       hard-wired Python code"という記述通り、テストfixtureに実Zephyrコミット
+       （`77e25d8f3c...`）を使い、Doxygen出力からC言語のソース範囲を特定する
+       アダプタ（ADR `0011-c-spans-located-by-doxygen.rst`）を持つ。
+     - **実際の適用例（実質的なアセスメント環境の本体）**:
+       [tiacsys/safety-toolbox](https://github.com/tiacsys/safety-toolbox)
+       「Safe Data API」。Zephyrカーネル全体の認証スコープではなく、
+       **実在する小規模なZephyr west module**（CRC保護・冗長コピー・mutexで
+       データ整合性を保証するコンテナ）を題材にした、要求
+       （Sphinx-Needs）→実装→ztestテスト→Twister結果→トレーサビリティ
+       という一連の証跡が実際に`affirmatrix.yaml`で接続され、
+       **GitHub Pagesで公開稼働中**（<https://tiacsys.github.io/safety-toolbox/>、
+       実際にブラウザでアクセスし、Requirement Specification・Test
+       Specification・API Traceability等のページが機能していることを確認済み。
+       テストレポートのみ「Twister実行待ち」で未公開）。
+     - **位置づけ**: Zephyr本体の公式Safety Committee認証プロセス（要点3で
+       確認した`doc/safety/safety_overview.rst`等）とは**別の、TiaC Systems
+       Network独自の実証プロジェクト**。「手法が実際に動くことを示す、小規模
+       だが本物のZephyrモジュールでの実証」という位置づけであり、Zephyr
+       カーネル全体のSIL3認証を代替するものではない。
 - **本PoCへの示唆（今後の検討材料。今回はタスク化しない）**:
   - 本PoCが採用しているKernelSbom方式（`.o`単位の`.cmd`ファイルを追う）は、
     Zephyrの`west spdx`（CMakeターゲット単位）より**既に1段細かい粒度**で
     動いている。関数/シンボルレベルへの深化は、Zephyr側でも要望・議論の
     形跡がなく、本PoCとしても優先度を上げる材料はない。
-  - Functional Safetyとの接続手法（SPDX Safety Profile + StrictDoc）は、
-    B-2（SPDX 3.1 Safety Profileの成熟度待ち）の判断に対する**他プロジェクトの
-    追加の先行事例**として参考にできる。B-2の「時期尚早」判断（Safety Profileが
-    RC段階）を裏付ける材料として使える。
+  - Functional Safetyとの接続手法（SPDX Safety Profile + StrictDoc、および
+    `affirmatrix`のドリフト検知+証跡グラフ方式）は、B-2（SPDX 3.1 Safety
+    Profileの成熟度待ち）の判断に対する**他プロジェクトの追加の先行事例**
+    として参考にできる。`affirmatrix`自体が"pre-alpha"であることも、B-2の
+    「時期尚早」判断を裏付ける材料として使える。
   - 完了条件: 特になし（継続的な参考情報としてバックログに記録するのみ）。
     B-2再検討時に参照。
 - 詳細な調査結果とソースは、このタスクを行った会話ログ（本ブランチ
