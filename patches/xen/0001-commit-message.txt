@@ -1,0 +1,24 @@
+xen: add a "make sbom" target generating an SPDX 3.0.1 SBOM
+
+Add `make sbom` to xen/Makefile.  It builds the hypervisor if needed and then
+runs the SBOM generator merged into the Linux kernel (scripts/sbom/, a.k.a.
+KernelSbom) over prelink.o, producing sbom-build.spdx.json,
+sbom-output.spdx.json and sbom.used-files.txt next to the build output.
+
+The Linux tool is used unmodified and is not imported into this tree: point
+KERNEL_SBOM_DIR at a Linux checkout's scripts/sbom directory.  KernelSbom
+works by following Kbuild .cmd files and has a registry of per-command
+parsers, which does not know a handful of Xen build commands (mv, the
+compat-*.py family, binfile, combine_two_binaries.py, mkflask.sh,
+mkaccess_vector.sh, ...).  scripts/sbom/xen_parsers.py registers parsers for
+these at run time, and scripts/sbom/gen_xen_sbom.py is the small driver that
+installs them before running the unmodified tool.
+
+Limitations of this RFC:
+ * Hypervisor only (tools/, stubdom/ are not covered).
+ * In-tree builds only.
+ * Requires Python 3.10 or later, as the Linux tool does.
+ * The parser list needs maintenance as Xen's build rules change.
+
+Measured on c4bf5bc5f0 (x86_64 defconfig): 1518 input files, no unknown
+build command.  The arm64 defconfig also completes with no unknown command.

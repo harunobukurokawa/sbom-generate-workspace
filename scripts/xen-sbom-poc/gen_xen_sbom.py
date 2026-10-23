@@ -10,24 +10,36 @@
 #
 # Usage:
 #   gen_xen_sbom.py <sbom_dir> <xen_hv_dir> <out_dir> [root_artifact]
+#                   [--srcarch ARCH] [--package-version VERSION]
+#
+# --srcarch / --package-version default to "x86" / "4.23-unstable" (the values
+# this driver historically hard-coded). The in-tree `make sbom` target passes
+# the real ones ($(SRCARCH), $(XEN_FULLVERSION)).
 #
 # Unlike the baseline PoC, this does NOT pass --do-not-fail-on-unknown-build-command:
 # any remaining unknown command is a hard failure, guaranteeing the "zero unknown
 # commands" result and catching regressions.
 
+import argparse
 import os
 import runpy
 import sys
 
 
 def main() -> None:
-    if len(sys.argv) < 4:
-        print(__doc__)
-        sys.exit(2)
-    sbom_dir = os.path.abspath(sys.argv[1])
-    xen_hv = os.path.abspath(sys.argv[2])
-    out_dir = os.path.abspath(sys.argv[3])
-    root = sys.argv[4] if len(sys.argv) > 4 else "prelink.o"
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("sbom_dir")
+    ap.add_argument("xen_hv")
+    ap.add_argument("out_dir")
+    ap.add_argument("root", nargs="?", default="prelink.o")
+    ap.add_argument("--srcarch", default="x86")
+    ap.add_argument("--package-version", default="4.23-unstable")
+    args = ap.parse_args()
+    sbom_dir = os.path.abspath(args.sbom_dir)
+    xen_hv = os.path.abspath(args.xen_hv)
+    out_dir = os.path.abspath(args.out_dir)
+    root = args.root
 
     # Make the upstream sbom package and this directory importable.
     sys.path.insert(0, sbom_dir)
@@ -39,7 +51,7 @@ def main() -> None:
     xen_parsers.OBJ_TREE = xen_hv  # filter parsed inputs to files that exist
     xen_parsers.install_xen_extensions()
 
-    os.environ.setdefault("SRCARCH", "x86")
+    os.environ.setdefault("SRCARCH", args.srcarch)
     os.makedirs(out_dir, exist_ok=True)
 
     # Build argv for the upstream sbom.py entry point. In-tree build => src == obj.
@@ -56,7 +68,7 @@ def main() -> None:
         "--spdxId-prefix", "urn:xenproject.org:",
         "--build-type", "urn:xenproject.org:Kbuild",
         "--package-license", "GPL-2.0-only",
-        "--package-version", "4.23-unstable",
+        "--package-version", args.package_version,
     ]
 
     # cwd must be the obj-tree for root-artifact resolution, matching run-xen-poc.sh.

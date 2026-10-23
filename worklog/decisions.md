@@ -360,3 +360,32 @@
 - **バージョン固定の理由**: 上記issueの修正が将来のリリースに入る可能性が
   あるため、`fetch-spdx-tools-java.sh` はバージョンを明示的に固定し、
   バンプ時はissueの状況を確認するようコメントで指示している。
+
+## ADR-0014: B-4 は「Xen ツリー内の `make sbom` + KERNEL_SBOM_DIR」で RFC パッチ化する
+
+- **背景**: B-4（xen/ への `make sbom` 相当ターゲット統合）に着手。Linux は
+  `scripts/sbom/` が本体ツリー内にあり `make sbom` で動く。Xen は Linux のツールを
+  持たない。RFC を FuSa 関連チームへ見せるため、Xen パッチ形式（RFC PATCH）で提示する
+  方針（ユーザー決定）。
+- **決定**:
+  1. `xen/Makefile` の `main-targets` に `sbom` を追加。`_sbom: _build` として
+     ハイパーバイザーをビルド後にドライバを実行する。
+  2. Linux の KernelSbom は **Xen ツリーに取り込まない**。`KERNEL_SBOM_DIR=<linux>/scripts/sbom`
+     で外部指定する（「上流を無改変で使う」原則の維持、ライセンス・保守の取り込み回避）。
+  3. Xen 固有部分（`xen_parsers.py` とドライバ）は `xen/scripts/sbom/` に置く。
+     正本はこのリポジトリの `scripts/xen-sbom-poc/` とし、
+     `export-xen-rfc-patch.sh` でコピー→パッチ生成して**ドリフトを防ぐ**。
+  4. 初版の制約を明示的に検査して失敗させる: KERNEL_SBOM_DIR 未指定、Python 3.10 未満、
+     out-of-tree ビルド（in-tree のみ対応）。
+  5. ドライバに `--srcarch` / `--package-version` を追加し、Makefile から
+     `$(SRCARCH)` / `$(XEN_FULLVERSION)` を渡す（従来は x86 / 4.23-unstable 固定）。
+- **理由**: 外部依存を Makefile 変数 1 つに絞れば Xen 側の変更は最小で、
+  レビューもしやすい。Python 3.10 要件は、検査がないと `dict[...]` の TypeError という
+  原因の読み取りにくい失敗になる（実際にこのホストの既定 python3 は 3.8 で発生した）。
+- **検証**: x86_64 defconfig のビルド済みツリーで `make sbom PYTHON=python3.12` が成功。
+  使用ファイル 1,518 件・build グラフ 3,554 要素で、既存の `analysis/xen-full/` と
+  **同一**。クリーンな Xen ツリーに `git apply --check` が通ることも確認。
+  arm64 / out-of-tree は未検証。
+- **未決**: Signed-off-by は付けていない（投稿者本人が付与）。パーサー保守体制
+  （B-12）と、Linux ツールを Xen がどう参照するか（外部 checkout 前提でよいか）は
+  コミュニティ側の判断が要る。

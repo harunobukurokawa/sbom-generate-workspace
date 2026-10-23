@@ -27,7 +27,9 @@ B-2 の必要性を調べた結果、当初の「P1・FuSa 直結」は**推論�
 
 ## 次段階
 
-### B-0 ⬜ P1（B-2 の前提）— B-2 の必要性確認
+### B-0 🔄 P1（B-2 の前提）— B-2 の必要性確認（2026-10-15 一次調査済み: 判定=不明）
+- **2026-10-15 結果**: 一次根拠なし（詳細は journal）。FuSa SIG wiki/議事録の確認と
+  Xen の CRA 方針が残る。SIG メンバー（伊藤さん等）に直接確認するのが最短。
 - Xen FuSa SIG のロードマップ/議事（wiki は bot 保護のため `!curl` 等で取得 or ML 確認）を
   読み、SBOM/SPDX Safety Profile が SIG の計画にあるか確認する。
 - SPDX 3.1 Safety Profile の最終化状況を追跡（RC→正式化の時期）。
@@ -101,7 +103,9 @@ B-2 の必要性を調べた結果、当初の「P1・FuSa 直結」は**推論�
     こちらは `.cmd` を生成している。tools 配下でも一部は cmd グラフ方式が使える。
 - 完了条件: hypervisor 以外の主要コンポーネントの SBOM が生成できる。
 
-### B-4 ⬜ P2 — xen/ への `make sbom` 相当ターゲット統合（CI 再現）
+### B-4 🔄 P2 — xen/ への `make sbom` 相当ターゲット統合（CI 再現）
+- **2026-10-15**: x86_64 で実装・検証済み、RFC パッチ `patches/xen/0001-*.patch` 生成
+  （ADR-0014）。残り: arm64 / out-of-tree の検証、CI への組み込み、GitLab 共有。
 - 現状は外部ドライバ（`generate-xen-sbom.sh`）。Xen ビルドに組み込み CI で再現可能に。
 - 完了条件: Xen ツリー内のターゲット/ラッパで SBOM がワンステップ生成。
 

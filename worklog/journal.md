@@ -1055,3 +1055,33 @@ Network独自の実証プロジェクトであり、Zephyrカーネル全体のS
 ものではなく「手法が実際に動くことを示す、小規模だが本物のZephyrモジュールでの
 実証」という位置づけであることを確認した。`worklog/backlog.md`のB-13に要点6
 として追記した。
+
+## 2026-10-15 B-0 調査・B-4 着手（RFC パッチ化）
+
+次の作業として (1) Xen FuSa 関連チームへ GitLab で RFC を共有、(2) 日本語コミュニティ向け
+資料（記事+スライド）の作成、が決まり（RFC の形は Xen パッチ形式 RFC PATCH）、
+まず B-0 と B-4 から着手した。
+
+### B-0（FuSa SIG が SBOM を必要とするか）— 結論: **不明**
+サブエージェントで公開情報を調査。Yes と言える一次根拠はなく、No とも言えない。
+- 確認済み: xen-devel 2026-07-21 で FuSa 文書担当（Ayan Kumar Halder 氏）が
+  「SPDX SBOM でドキュメントとコードとコミット SHA を結べる。Xen 向けに黒川が調査中」
+  と発言（**個人発言**。SIG の要求ではなく、調査対象は本プロジェクト自身）。
+  ELISA London Workshop（2026-08-10）の recap に "Xen support is hoped for"
+  （主語不明）。2021 年の Hyperlaunch 設計セッションに SBOM 言及。
+- 未確認: FuSa SIG の wiki/議事録/ロードマップ（bot 保護で取得不可）、Xen の CRA 方針、
+  Xen Safety Committee の要求。
+- SPDX 3.1 は 2026-10-15 時点で正式版未確認（RC1 止まり、Safety Profile も RC）。
+- 注意: 検索結果が示した xen-devel 2025-01/msg01298 は SBOM 言及なし（出典に使わない）。
+- 含意: 「なぜ Xen で必要か」を日本語資料で語る際、**FuSa SIG の要求と断定しない**。
+  根拠として使えるのは (a) トレーサビリティ/変更影響分析という一般的価値、(b) CRA・
+  サプライチェーンの外部動向（Xen への適用関係は未確認と明記）、(c) FuSa 文書担当の関心。
+  B-2 は引き続き保留。
+
+### B-4（`make sbom`）— 実装・検証済み、RFC パッチ生成まで
+設計は ADR-0014。`xen/Makefile` に `sbom` ターゲット、`xen/scripts/sbom/` に
+ドライバとパーサーを配置。このホストの既定 `python3` は 3.8 で KernelSbom が
+動かず（`dict[...]` の TypeError）、`/usr/local/bin/python3.12` で成功。以後はこの
+失敗を Makefile が事前に検出する。結果は既存 `analysis/xen-full/` と同一
+（1,518 ファイル / 3,554 要素）。`patches/xen/0001-*.patch` を生成
+（`scripts/xen-sbom-poc/export-xen-rfc-patch.sh`）。ユニットテスト 32 件 OK。
